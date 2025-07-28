@@ -30,7 +30,7 @@ const SLIPPAGE_BPS = 300 // 3%
 
 export default function DustSwapApp() {
   const { address, isConnected } = useAccount()
-  const [dustTokens, setDustTokens] = useState(MOCK_DUST_TOKENS)
+  const [dustTokens] = useState(MOCK_DUST_TOKENS)
   const [isFactsOpen, setIsFactsOpen] = useState(false)
   const [isSwapping, setIsSwapping] = useState(false)
   const [selectedTokens, setSelectedTokens] = useState<string[]>(MOCK_DUST_TOKENS.map((token) => token.address)) // Start with all selected
@@ -52,7 +52,6 @@ export default function DustSwapApp() {
   }
 
   const isAllSelected = selectedTokens.length === dustTokens.length
-  const isPartiallySelected = selectedTokens.length > 0 && selectedTokens.length < dustTokens.length
 
   // Calculate totals for selected tokens only
   const selectedTokensData = dustTokens.filter((token) => selectedTokens.includes(token.address))

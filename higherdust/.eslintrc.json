@@ -1,8 +1,13 @@
 {
-  "extends": ["next/core-web-vitals"],
+  "extends": [
+    "next/core-web-vitals",
+    "plugin:@typescript-eslint/recommended"
+  ],
+  "plugins": ["@typescript-eslint"],
+  "parser": "@typescript-eslint/parser",
   "rules": {
     "prefer-const": "error",
-    "no-unused-vars": "error",
+    "no-unused-vars": "off",
     "@typescript-eslint/no-unused-vars": "error"
   }
 }
