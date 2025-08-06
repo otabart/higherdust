@@ -1,0 +1,31 @@
+{
+  "name": "higherdust-contracts",
+  "version": "1.0.0",
+  "description": "Smart contracts for HigherDust 80/20 split router with Uniswap V3 integration",
+  "main": "index.js",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "test:coverage": "hardhat coverage",
+    "deploy:base": "hardhat run scripts/deploy.js --network base",
+    "deploy:baseSepolia": "hardhat run scripts/deploy-testnet.js --network baseSepolia",
+    "setup:testnet": "hardhat run scripts/setup-testnet.js --network baseSepolia",
+    "deploy:production": "hardhat run scripts/deploy-production.js --network base",
+    "test:contracts": "hardhat run scripts/test-contracts.js --network baseSepolia",
+    "verify:base": "hardhat verify --network base",
+    "verify:baseSepolia": "hardhat verify --network baseSepolia",
+    "deploy:baseGoerli": "hardhat run scripts/deploy-testnet.js --network baseGoerli",
+    "verify:baseGoerli": "hardhat verify --network baseGoerli"
+  },
+  "dependencies": {
+    "@chainlink/contracts": "^0.8.0",
+    "@openzeppelin/contracts": "^4.9.6",
+    "@uniswap/v3-core": "^1.0.1",
+    "@uniswap/v3-periphery": "^1.4.4"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^3.0.0",
+    "dotenv": "^16.0.3",
+    "hardhat": "^2.26.1"
+  }
+}
