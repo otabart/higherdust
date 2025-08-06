@@ -68,6 +68,14 @@ export function WalletConnect() {
       const readyConnectors = connectors.filter(connector => connector.ready)
       
       if (readyConnectors.length === 0) {
+        // Try to connect with any connector, even if not ready
+        if (connectors.length > 0) {
+          const connector = connectors[0]
+          console.log(`🔗 Attempting to connect with non-ready connector: ${connector.name}`)
+          await connect({ connector })
+          return
+        }
+        
         setWalletError("No wallet connectors available. Please install a wallet extension (MetaMask, Rainbow, etc.)")
         return
       }

@@ -110,6 +110,8 @@ function SwapDustInterface() {
         }
       } catch (error) {
         console.error('❌ Farcaster SDK initialization failed:', error)
+        // Don't block the app if Farcaster SDK fails
+        console.log('🔄 Continuing without Farcaster SDK...')
       }
     }
 
@@ -119,8 +121,10 @@ function SwapDustInterface() {
   // Call ready() when content is actually loaded
   useEffect(() => {
     const markAppAsReady = async () => {
-      // Wait for initial content to load (tokens detection, wallet connection, etc.)
-      if (!isDetecting && dustTokens.length >= 0) {
+      // More robust ready() logic - don't wait forever for token detection
+      const shouldMarkReady = !isDetecting || dustTokens.length >= 0 || isConnected
+      
+      if (shouldMarkReady) {
         try {
           console.log('📱 Marking Farcaster Mini App as ready...')
           await sdk.actions.ready()
@@ -131,8 +135,18 @@ function SwapDustInterface() {
       }
     }
 
+    // Add timeout to prevent infinite loading
+    const timeout = setTimeout(() => {
+      console.log('⏰ Timeout reached - marking app as ready anyway')
+      sdk.actions.ready().catch(error => {
+        console.error('❌ Timeout ready() failed:', error)
+      })
+    }, 10000) // 10 second timeout
+
     markAppAsReady()
-  }, [isDetecting, dustTokens.length])
+
+    return () => clearTimeout(timeout)
+  }, [isDetecting, dustTokens.length, isConnected])
 
   const { writeContract, data: hash, isPending, error } = useWriteContract()
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
