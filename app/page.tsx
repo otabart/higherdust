@@ -108,10 +108,27 @@ function SwapDustInterface() {
         } catch (authError) {
           console.log('ℹ️ User not authenticated with Farcaster (optional)')
         }
+        
+        // Call ready() immediately after initialization
+        try {
+          console.log('📱 Calling sdk.actions.ready() immediately...')
+          await sdk.actions.ready()
+          console.log('✅ Farcaster Mini App ready - splash screen hidden')
+        } catch (readyError) {
+          console.error('❌ Failed to call ready():', readyError)
+        }
       } catch (error) {
         console.error('❌ Farcaster SDK initialization failed:', error)
         // Don't block the app if Farcaster SDK fails
         console.log('🔄 Continuing without Farcaster SDK...')
+        
+        // Still try to call ready() even if initialization fails
+        try {
+          await sdk.actions.ready()
+          console.log('✅ Farcaster Mini App ready (fallback)')
+        } catch (readyError) {
+          console.error('❌ Fallback ready() failed:', readyError)
+        }
       }
     }
 
@@ -121,32 +138,19 @@ function SwapDustInterface() {
   // Call ready() when content is actually loaded
   useEffect(() => {
     const markAppAsReady = async () => {
-      // More robust ready() logic - don't wait forever for token detection
-      const shouldMarkReady = !isDetecting || dustTokens.length >= 0 || isConnected
-      
-      if (shouldMarkReady) {
-        try {
-          console.log('📱 Marking Farcaster Mini App as ready...')
-          await sdk.actions.ready()
-          console.log('✅ Farcaster Mini App ready - splash screen hidden')
-        } catch (error) {
-          console.error('❌ Failed to mark app as ready:', error)
-        }
+      // Call ready() immediately when component mounts
+      try {
+        console.log('📱 Marking Farcaster Mini App as ready...')
+        await sdk.actions.ready()
+        console.log('✅ Farcaster Mini App ready - splash screen hidden')
+      } catch (error) {
+        console.error('❌ Failed to mark app as ready:', error)
       }
     }
 
-    // Add timeout to prevent infinite loading
-    const timeout = setTimeout(() => {
-      console.log('⏰ Timeout reached - marking app as ready anyway')
-      sdk.actions.ready().catch(error => {
-        console.error('❌ Timeout ready() failed:', error)
-      })
-    }, 10000) // 10 second timeout
-
+    // Call ready() immediately, don't wait for conditions
     markAppAsReady()
-
-    return () => clearTimeout(timeout)
-  }, [isDetecting, dustTokens.length, isConnected])
+  }, []) // Only run once when component mounts
 
   const { writeContract, data: hash, isPending, error } = useWriteContract()
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
