@@ -2,11 +2,11 @@
   "name": "SWAPDUST",
   "description": "Swap your dust tokens for HIGHER tokens with real Uniswap V3 integration",
   "version": "1.0.0",
-  "url": "https://higherdust-nxbsf4fkx-ctr-bunker.vercel.app",
-  "icon": "https://higherdust-nxbsf4fkx-ctr-bunker.vercel.app/og-image.png",
+  "url": "https://swapdust.vercel.app",
+  "icon": "https://swapdust.vercel.app/og-image.png",
   "author": {
     "name": "SWAPDUST Team",
-    "url": "https://higherdust-nxbsf4fkx-ctr-bunker.vercel.app"
+    "url": "https://swapdust.vercel.app"
   },
   "permissions": [
     "user:read",

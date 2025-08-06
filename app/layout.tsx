@@ -18,7 +18,7 @@ export default function RootLayout({
     <html lang="en">
       <head>
         {/* Farcaster Mini App Embed Metadata */}
-        <meta property="fc:miniapp" content='{"version":"1","imageUrl":"https://higherdust-nxbsf4fkx-ctr-bunker.vercel.app/og-image.png","button":{"title":"SWAPDUST","action":{"url":"https://higherdust-nxbsf4fkx-ctr-bunker.vercel.app"}}}' />
+        <meta property="fc:miniapp" content='{"version":"1","imageUrl":"https://swapdust.vercel.app/og-image.png","button":{"title":"SWAPDUST","action":{"url":"https://swapdust.vercel.app"}}}' />
         
         {/* Preconnect to Quick Auth Server for performance */}
         <link rel="preconnect" href="https://auth.farcaster.xyz" />
