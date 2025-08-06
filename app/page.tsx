@@ -109,26 +109,12 @@ function SwapDustInterface() {
           console.log('ℹ️ User not authenticated with Farcaster (optional)')
         }
         
-        // Call ready() immediately after initialization
-        try {
-          console.log('📱 Calling sdk.actions.ready() immediately...')
-          await sdk.actions.ready()
-          console.log('✅ Farcaster Mini App ready - splash screen hidden')
-        } catch (readyError) {
-          console.error('❌ Failed to call ready():', readyError)
-        }
+        // Don't call ready() here - it will be called when the app is fully loaded
+        console.log('✅ Farcaster SDK initialized successfully')
       } catch (error) {
         console.error('❌ Farcaster SDK initialization failed:', error)
         // Don't block the app if Farcaster SDK fails
         console.log('🔄 Continuing without Farcaster SDK...')
-        
-        // Still try to call ready() even if initialization fails
-        try {
-          await sdk.actions.ready()
-          console.log('✅ Farcaster Mini App ready (fallback)')
-        } catch (readyError) {
-          console.error('❌ Fallback ready() failed:', readyError)
-        }
       }
     }
 
@@ -138,19 +124,28 @@ function SwapDustInterface() {
   // Call ready() when content is actually loaded
   useEffect(() => {
     const markAppAsReady = async () => {
-      // Call ready() immediately when component mounts
-      try {
-        console.log('📱 Marking Farcaster Mini App as ready...')
-        await sdk.actions.ready()
-        console.log('✅ Farcaster Mini App ready - splash screen hidden')
-      } catch (error) {
-        console.error('❌ Failed to mark app as ready:', error)
+      // Wait for the app to be fully loaded and ready to display
+      // This includes waiting for initial render, wallet connection, and token detection
+      const isAppReady = !isDetecting && (dustTokens.length >= 0 || isConnected)
+      
+      if (isAppReady) {
+        try {
+          console.log('📱 Marking Farcaster Mini App as ready...')
+          await sdk.actions.ready()
+          console.log('✅ Farcaster Mini App ready - splash screen hidden')
+        } catch (error) {
+          console.error('❌ Failed to mark app as ready:', error)
+        }
       }
     }
 
-    // Call ready() immediately, don't wait for conditions
-    markAppAsReady()
-  }, []) // Only run once when component mounts
+    // Add a small delay to ensure the app is fully rendered
+    const timer = setTimeout(() => {
+      markAppAsReady()
+    }, 100) // Small delay to ensure React has rendered
+
+    return () => clearTimeout(timer)
+  }, [isDetecting, dustTokens.length, isConnected]) // Re-run when these conditions change
 
   const { writeContract, data: hash, isPending, error } = useWriteContract()
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
