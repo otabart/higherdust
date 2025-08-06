@@ -101,10 +101,6 @@ function SwapDustInterface() {
       try {
         console.log('🚀 Initializing Farcaster Mini App SDK...')
         
-        // Signal that the app is ready to display
-        await sdk.actions.ready()
-        console.log('✅ Farcaster Mini App ready')
-        
         // Optional: Get Quick Auth token for user authentication
         try {
           const { token } = await sdk.quickAuth.getToken()
@@ -119,6 +115,24 @@ function SwapDustInterface() {
 
     initializeFarcaster()
   }, [])
+
+  // Call ready() when content is actually loaded
+  useEffect(() => {
+    const markAppAsReady = async () => {
+      // Wait for initial content to load (tokens detection, wallet connection, etc.)
+      if (!isDetecting && dustTokens.length >= 0) {
+        try {
+          console.log('📱 Marking Farcaster Mini App as ready...')
+          await sdk.actions.ready()
+          console.log('✅ Farcaster Mini App ready - splash screen hidden')
+        } catch (error) {
+          console.error('❌ Failed to mark app as ready:', error)
+        }
+      }
+    }
+
+    markAppAsReady()
+  }, [isDetecting, dustTokens.length])
 
   const { writeContract, data: hash, isPending, error } = useWriteContract()
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({
