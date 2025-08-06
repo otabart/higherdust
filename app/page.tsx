@@ -944,7 +944,10 @@ function SwapDustInterface() {
         
         try {
           // Get individual quote from contract (now uses real Uniswap quotes)
-          const quote = await publicClient?.readContract({
+          if (!publicClient) {
+            throw new Error('Public client not available')
+          }
+          const quote = await publicClient.readContract({
             address: CONTRACT_ADDRESSES.SPLIT_ROUTER as `0x${string}`,
             abi: SPLIT_ROUTER_ABI,
             functionName: 'getSwapQuote',
@@ -969,7 +972,10 @@ function SwapDustInterface() {
       let individualQuotesArray: bigint[]
       
       try {
-        const bulkQuoteResult = await publicClient?.readContract({
+        if (!publicClient) {
+          throw new Error('Public client not available')
+        }
+        const bulkQuoteResult = await publicClient.readContract({
           address: CONTRACT_ADDRESSES.SPLIT_ROUTER as `0x${string}`,
           abi: SPLIT_ROUTER_ABI,
           functionName: 'getBulkSwapQuote',
