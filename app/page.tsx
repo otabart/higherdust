@@ -19,6 +19,7 @@ import { useComprehensiveTokenDetection } from "@/hooks/use-comprehensive-token-
 import { strings } from "@/lib/strings"
 import { CONTRACT_ADDRESSES, SPLIT_ROUTER_ABI } from "@/lib/contracts"
 import { config } from "@/lib/wagmi-config"
+import { sdk } from '@farcaster/miniapp-sdk'
 
 // Maximum uint256 value for unlimited approval
 const MAX_UINT256 = BigInt("115792089237316195423570985008687907853269984665640564039457584007913129639935")
@@ -94,21 +95,25 @@ function SwapDustInterface() {
   const [isApproving, setIsApproving] = useState(false)
 
 
-  // Initialize Farcaster SDK
+  // Initialize Farcaster Mini App SDK
   useEffect(() => {
     const initializeFarcaster = async () => {
       try {
-        // Dynamic import to avoid SSR issues
-        const farcasterSDK = await import('@farcaster/miniapp-sdk')
+        console.log('🚀 Initializing Farcaster Mini App SDK...')
         
-        // Initialize the SDK
-        await farcasterSDK.sdk.actions.ready()
+        // Signal that the app is ready to display
+        await sdk.actions.ready()
+        console.log('✅ Farcaster Mini App ready')
         
-        // Store SDK instance globally for use in other components
-        ;(window as any).farcasterSDK = farcasterSDK.sdk
-        
+        // Optional: Get Quick Auth token for user authentication
+        try {
+          const { token } = await sdk.quickAuth.getToken()
+          console.log('🔐 Farcaster user authenticated:', token ? 'Yes' : 'No')
+        } catch (authError) {
+          console.log('ℹ️ User not authenticated with Farcaster (optional)')
+        }
       } catch (error) {
-        // Farcaster SDK initialization failed (normal in local development)
+        console.error('❌ Farcaster SDK initialization failed:', error)
       }
     }
 

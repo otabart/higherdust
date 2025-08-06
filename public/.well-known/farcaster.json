@@ -1,28 +1,27 @@
 {
   "name": "SWAPDUST",
-  "description": "Bulk swap dust tokens to HIGHER on Base",
-  "image": "http://localhost:3000/favicon.ico",
-  "external_url": "http://localhost:3000",
-  "app": {
-    "fid": 1,
-    "frame": {
-      "image": "http://localhost:3000/frame-image.png",
-      "buttons": [
-        {
-          "label": "Connect Wallet",
-          "action": "post"
-        },
-        {
-          "label": "Swap Dust",
-          "action": "post"
-        }
-      ],
-      "post_url": "http://localhost:3000/api/frame"
-    }
+  "description": "Swap your dust tokens for HIGHER tokens with real Uniswap V3 integration",
+  "version": "1.0.0",
+  "url": "https://higherdust-nxbsf4fkx-ctr-bunker.vercel.app",
+  "icon": "https://higherdust-nxbsf4fkx-ctr-bunker.vercel.app/og-image.png",
+  "author": {
+    "name": "SWAPDUST Team",
+    "url": "https://higherdust-nxbsf4fkx-ctr-bunker.vercel.app"
   },
-  "validations": {
-    "fname": {
-      "required": false
-    }
+  "permissions": [
+    "user:read",
+    "user:write"
+  ],
+  "features": [
+    "wallet-connect",
+    "token-swap",
+    "uniswap-v3"
+  ],
+  "networks": [
+    "base"
+  ],
+  "contracts": {
+    "splitRouter": "0x44bF14251aC9e798B892FEF884b55259E4d58eB7",
+    "higherToken": "0x0578d8A44db98B23BF096A382e016e29a5Ce0ffe"
   }
 } 

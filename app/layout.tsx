@@ -17,6 +17,12 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        {/* Farcaster Mini App Embed Metadata */}
+        <meta property="fc:miniapp" content='{"version":"1","imageUrl":"https://higherdust-nxbsf4fkx-ctr-bunker.vercel.app/og-image.png","button":{"title":"SWAPDUST","action":{"url":"https://higherdust-nxbsf4fkx-ctr-bunker.vercel.app"}}}' />
+        
+        {/* Preconnect to Quick Auth Server for performance */}
+        <link rel="preconnect" href="https://auth.farcaster.xyz" />
+        
         {/* Disable CSP in development to avoid Chrome extension conflicts */}
         {process.env.NODE_ENV === 'development' && (
           <meta httpEquiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: chrome-extension:; script-src 'self' 'unsafe-inline' 'unsafe-eval' chrome-extension:; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https: chrome-extension:; connect-src 'self' https: ws: wss: chrome-extension:; frame-src 'self' chrome-extension:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'" />
