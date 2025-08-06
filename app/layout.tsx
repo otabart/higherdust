@@ -27,6 +27,23 @@ export default function RootLayout({
         {process.env.NODE_ENV === 'development' && (
           <meta httpEquiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: chrome-extension:; script-src 'self' 'unsafe-inline' 'unsafe-eval' chrome-extension:; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob: https: chrome-extension:; connect-src 'self' https: ws: wss: chrome-extension:; frame-src 'self' chrome-extension:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'" />
         )}
+        
+        {/* Handle EVM Ask extension conflicts */}
+        <script dangerouslySetInnerHTML={{
+          __html: `
+            // Prevent EVM Ask extension from redefining window.ethereum
+            if (typeof window !== 'undefined') {
+              const originalDefineProperty = Object.defineProperty;
+              Object.defineProperty = function(obj, prop, descriptor) {
+                if (obj === window && prop === 'ethereum' && window.ethereum) {
+                  console.log('🛡️ Preventing EVM Ask extension from redefining window.ethereum');
+                  return window.ethereum;
+                }
+                return originalDefineProperty.call(this, obj, prop, descriptor);
+              };
+            }
+          `
+        }} />
       </head>
       <body className={inter.className}>
         <ErrorBoundary>

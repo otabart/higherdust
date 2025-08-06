@@ -30,29 +30,34 @@ export function WalletConnect() {
     if (typeof window !== 'undefined') {
       const wallets: string[] = []
       
-      // Check for specific wallet extensions
-      if (window.ethereum) {
-        console.log('🔍 Window.ethereum detected:', {
-          exists: !!window.ethereum,
-          isMetaMask: window.ethereum.isMetaMask,
-          isRainbow: window.ethereum.isRainbow,
-          isCoinbaseWallet: window.ethereum.isCoinbaseWallet,
-          providers: window.ethereum.providers?.length || 0
-        })
-        
-        if (window.ethereum.isMetaMask) wallets.push('MetaMask')
-        if (window.ethereum.isRainbow) wallets.push('Rainbow')
-        if (window.ethereum.isCoinbaseWallet) wallets.push('Coinbase Wallet')
-        if (window.ethereum.providers) {
-          window.ethereum.providers.forEach((provider: any) => {
-            if (provider.isMetaMask && !wallets.includes('MetaMask')) wallets.push('MetaMask')
-            if (provider.isRainbow && !wallets.includes('Rainbow')) wallets.push('Rainbow')
-            if (provider.isCoinbaseWallet && !wallets.includes('Coinbase Wallet')) wallets.push('Coinbase Wallet')
+      // Check for specific wallet extensions with error handling
+      try {
+        if (window.ethereum) {
+          console.log('🔍 Window.ethereum detected:', {
+            exists: !!window.ethereum,
+            isMetaMask: window.ethereum.isMetaMask,
+            isRainbow: window.ethereum.isRainbow,
+            isCoinbaseWallet: window.ethereum.isCoinbaseWallet,
+            providers: window.ethereum.providers?.length || 0
           })
+          
+          if (window.ethereum.isMetaMask) wallets.push('MetaMask')
+          if (window.ethereum.isRainbow) wallets.push('Rainbow')
+          if (window.ethereum.isCoinbaseWallet) wallets.push('Coinbase Wallet')
+          if (window.ethereum.providers) {
+            window.ethereum.providers.forEach((provider: any) => {
+              if (provider.isMetaMask && !wallets.includes('MetaMask')) wallets.push('MetaMask')
+              if (provider.isRainbow && !wallets.includes('Rainbow')) wallets.push('Rainbow')
+              if (provider.isCoinbaseWallet && !wallets.includes('Coinbase Wallet')) wallets.push('Coinbase Wallet')
+            })
+          }
+          
+          // If no specific wallets detected, add generic browser wallet
+          if (wallets.length === 0) wallets.push('Browser Wallet')
         }
-        
-        // If no specific wallets detected, add generic browser wallet
-        if (wallets.length === 0) wallets.push('Browser Wallet')
+      } catch (error) {
+        console.log('⚠️ Error detecting wallets (possibly EVM Ask extension conflict):', error)
+        wallets.push('Browser Wallet') // Fallback
       }
       
       setDetectedWallets(wallets)

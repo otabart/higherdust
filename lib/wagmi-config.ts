@@ -62,16 +62,17 @@ const transport = createRetryTransport()
 // Create Farcaster connector (no parameters needed)
 const farcasterConnector = farcasterMiniApp()
 
-// Create connectors with simplified setup (removed Coinbase Wallet)
+// Create connectors with simplified setup and better error handling
 const connectors = [
-  // Farcaster Mini App connector (primary)
-  farcasterConnector,
-  // Generic injected connector (fallback for MetaMask, Rainbow, etc.)
+  // Generic injected connector (primary - works with MetaMask, Rainbow, etc.)
   injected({
     shimDisconnect: true,
+    target: 'metaMask', // Prefer MetaMask if available
   }),
   // Specific MetaMask connector (backup)
   metaMask(),
+  // Farcaster Mini App connector (only in Farcaster environment)
+  ...(typeof window !== 'undefined' && window.location.hostname.includes('farcaster') ? [farcasterConnector] : []),
 ]
 
 console.log(`🔧 Created ${connectors.length} connectors`)
