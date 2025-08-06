@@ -1,8 +1,8 @@
-# HigherDust SplitRouter Testing Guide
+# SWAPDUST SplitRouter Testing Guide
 
 ## 🧪 Testing Strategy
 
-This guide covers comprehensive testing of the HigherDust SplitRouter contracts before production deployment.
+This guide covers comprehensive testing of the SWAPDUST SplitRouter contracts before production deployment.
 
 ## 📋 Prerequisites
 

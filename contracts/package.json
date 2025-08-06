@@ -1,7 +1,7 @@
 {
-  "name": "higherdust-contracts",
+  "name": "swapdust-contracts",
   "version": "1.0.0",
-  "description": "Smart contracts for HigherDust 80/20 split router with Uniswap V3 integration",
+  "description": "Smart contracts for SWAPDUST 80/20 split router with Uniswap V3 integration",
   "main": "index.js",
   "scripts": {
     "compile": "hardhat compile",

@@ -1,7 +1,7 @@
 const { ethers } = require("hardhat");
 
 async function main() {
-  console.log("🚀 Deploying HigherDust SplitRouter to Base Mainnet...");
+  console.log("🚀 Deploying SWAPDUST SplitRouter to Base Mainnet...");
   const [deployer] = await ethers.getSigners();
   console.log("Deploying contracts with account:", deployer.address);
   

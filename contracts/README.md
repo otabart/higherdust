@@ -1,8 +1,8 @@
-# HigherDust Smart Contracts
+# SWAPDUST Smart Contracts
 
 ## Overview
 
-This directory contains the smart contracts for the HigherDust application, which implements a sophisticated 80/20 split router for dust token swapping to HIGHER tokens with Protocol Owned Liquidity (POL) management.
+This directory contains the smart contracts for the SWAPDUST application, which implements a sophisticated 80/20 split router for dust token swapping to HIGHER tokens with Protocol Owned Liquidity (POL) management.
 
 ## Architecture
 

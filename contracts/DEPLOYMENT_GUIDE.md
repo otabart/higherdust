@@ -1,4 +1,4 @@
-# 🚀 HigherDust Smart Contract Deployment Guide
+# 🚀 SWAPDUST Smart Contract Deployment Guide
 
 ## ✅ Pre-Deployment Checklist
 

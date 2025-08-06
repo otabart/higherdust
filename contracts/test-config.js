@@ -1,4 +1,4 @@
-// Test Configuration for HigherDust SplitRouter
+// Test Configuration for SWAPDUST SplitRouter
 // This file contains test addresses and configuration for Base Goerli
 
 module.exports = {

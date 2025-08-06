@@ -131,7 +131,7 @@
 
 ## 🎉 **Result**
 
-**Your HigherDust application will be 100% real-time dynamic with:**
+**Your SWAPDUST application will be 100% real-time dynamic with:**
 - ✅ **Zero hardcoded data**
 - ✅ **Zero static fallbacks**
 - ✅ **100% live API dependencies**

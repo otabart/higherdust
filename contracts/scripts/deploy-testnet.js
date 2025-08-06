@@ -1,7 +1,7 @@
 const { ethers } = require("hardhat");
 
 async function main() {
-  console.log("🚀 Deploying HigherDust SplitRouter to Base Sepolia Testnet...");
+  console.log("🚀 Deploying SWAPDUST SplitRouter to Base Sepolia Testnet...");
 
   // Get the deployer account
   const [deployer] = await ethers.getSigners();

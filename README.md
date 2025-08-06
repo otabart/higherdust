@@ -1,4 +1,4 @@
-# HigherDust - Bulk Dust Token Swapper
+# SWAPDUST - Bulk Dust Token Swapper
 
 A comprehensive Web3 application for swapping dust tokens to HIGHER tokens on Base network with advanced token detection and robust error handling.
 
