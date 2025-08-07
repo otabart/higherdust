@@ -137,17 +137,12 @@ const nextConfig = {
       },
     ];
 
-    // Add X-Frame-Options only in development
+    // Don't set X-Frame-Options in production to allow iframe embedding
+    // Vercel will not add its own DENY header if we don't set it
     if (process.env.NODE_ENV === 'development') {
       headers.push({
         key: 'X-Frame-Options',
         value: 'SAMEORIGIN',
-      });
-    } else {
-      // In production, explicitly allow iframe embedding for Farcaster
-      headers.push({
-        key: 'X-Frame-Options',
-        value: 'ALLOWALL',
       });
     }
 
