@@ -143,6 +143,12 @@ const nextConfig = {
         key: 'X-Frame-Options',
         value: 'SAMEORIGIN',
       });
+    } else {
+      // In production, explicitly allow iframe embedding for Farcaster
+      headers.push({
+        key: 'X-Frame-Options',
+        value: 'ALLOWALL',
+      });
     }
 
     return [
