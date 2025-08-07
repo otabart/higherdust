@@ -106,44 +106,49 @@ const nextConfig = {
 
   // Basic headers for development stability
   async headers() {
+    const headers = [
+      // Basic CORS headers for API routes
+      {
+        key: 'Access-Control-Allow-Origin',
+        value: '*',
+      },
+      {
+        key: 'Access-Control-Allow-Methods',
+        value: 'GET, POST, PUT, DELETE, OPTIONS',
+      },
+      {
+        key: 'Access-Control-Allow-Headers',
+        value: 'Content-Type, Authorization, X-Requested-With',
+      },
+      {
+        key: 'X-Content-Type-Options',
+        value: 'nosniff',
+      },
+      {
+        key: 'Referrer-Policy',
+        value: 'origin-when-cross-origin',
+      },
+      // Development-friendly CSP for Chrome extensions and Farcaster Mini Apps
+      {
+        key: 'Content-Security-Policy',
+        value: process.env.NODE_ENV === 'development' 
+          ? "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: chrome-extension:; script-src 'self' 'unsafe-inline' 'unsafe-eval' chrome-extension:; connect-src 'self' https: wss: chrome-extension:; img-src 'self' data: blob: https: chrome-extension:; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:; object-src 'none'; base-uri 'self';"
+          : "frame-ancestors 'self' https://farcaster.xyz https://*.farcaster.xyz https://warpcast.com https://*.warpcast.com; default-src 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self' https:; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'self';",
+      },
+    ];
+
+    // Add X-Frame-Options only in development
+    if (process.env.NODE_ENV === 'development') {
+      headers.push({
+        key: 'X-Frame-Options',
+        value: 'SAMEORIGIN',
+      });
+    }
+
     return [
       {
         source: '/(.*)',
-        headers: [
-          // Basic CORS headers for API routes
-          {
-            key: 'Access-Control-Allow-Origin',
-            value: '*',
-          },
-          {
-            key: 'Access-Control-Allow-Methods',
-            value: 'GET, POST, PUT, DELETE, OPTIONS',
-          },
-          {
-            key: 'Access-Control-Allow-Headers',
-            value: 'Content-Type, Authorization, X-Requested-With',
-          },
-          // Frame embedding for Farcaster Mini Apps (only in development)
-          ...(process.env.NODE_ENV === 'development' && {
-            key: 'X-Frame-Options',
-            value: 'SAMEORIGIN',
-          }),
-          {
-            key: 'X-Content-Type-Options',
-            value: 'nosniff',
-          },
-          {
-            key: 'Referrer-Policy',
-            value: 'origin-when-cross-origin',
-          },
-          // Development-friendly CSP for Chrome extensions and Farcaster Mini Apps
-          {
-            key: 'Content-Security-Policy',
-            value: process.env.NODE_ENV === 'development' 
-              ? "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: chrome-extension:; script-src 'self' 'unsafe-inline' 'unsafe-eval' chrome-extension:; connect-src 'self' https: wss: chrome-extension:; img-src 'self' data: blob: https: chrome-extension:; style-src 'self' 'unsafe-inline' https:; font-src 'self' data: https:; object-src 'none'; base-uri 'self';"
-              : "frame-ancestors 'self' https://farcaster.xyz https://*.farcaster.xyz https://warpcast.com https://*.warpcast.com; default-src 'self'; script-src 'self' 'unsafe-inline'; connect-src 'self' https:; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'self';",
-          },
-        ],
+        headers,
       },
     ];
   },
