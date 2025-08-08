@@ -79,114 +79,47 @@ const fetchLiveDynamicTokens = async (): Promise<TokenInfo[]> => {
       console.warn('⚠️ Live trending tokens failed:', error)
     }
 
-    // Method 2: LIVE search for common patterns (optimized parallel)
-    console.log('🔍 Adding LIVE searched tokens...')
+    // Method 2: Get comprehensive Base token list (much more efficient)
+    console.log('🔍 Fetching comprehensive Base token list...')
     
-    // Dynamically search for various token patterns
-    const searchTerms = [
-      // Popular meme patterns
-      'PEPE', 'DOGE', 'SHIB', 'FLOKI', 'BONK', 'WOJAK', 'APE', 'CHAD',
-      // Base ecosystem
-      'HIGHER', 'DEGEN', 'BASED', 'BASE', 'COIN', 'TOKEN',
-      // Common words
-      'MOON', 'SEND', 'BUY', 'SELL', 'SWAP', 'TRADE',
-      // Emotions/actions
-      'FOMO', 'WAGMI', 'HODL', 'PUMP', 'ROCKET', 'MOON', 'STAR',
-      // Numbers (often used in dust tokens)
-      'ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE', 'TEN',
-      // Colors (common in token names)
-      'RED', 'BLUE', 'GREEN', 'PINK', 'GOLD', 'SILVER', 'BLACK', 'WHITE', 'YELLOW',
-      // User's specific tokens (from the image)
-      'SAGE', 'LOWER', 'POV', 'CITIZEN', 'CITIZ', 'VIRTUAL', 'POINT', 'VIEW',
-      // Zora creator coins and specific deployments
-      'ZORA', 'CREATOR', 'CLANK', 'CLANKR', 'DEPLOY', 'DEPLOYMENT',
-      // Additional common patterns
-      'BULL', 'BEAR', 'DIAMOND', 'HANDS', 'GEM', 'MOON', 'SHOT', 'PUMP', 'DUMP',
-      // Gaming/entertainment
-      'GAME', 'PLAY', 'FUN', 'JOY', 'HAPPY', 'SMILE', 'LAUGH', 'DANCE',
-      // Tech/AI related
-      'AI', 'BOT', 'ROBOT', 'TECH', 'WEB3', 'DEFI', 'NFT', 'DAO',
-      // Nature/animals
-      'FROG', 'BIRD', 'FISH', 'CAT', 'DOG', 'TREE', 'FLOWER', 'EARTH', 'FIRE',
-      // Food/drinks
-      'BURGER', 'PIZZA', 'COFFEE', 'TEA', 'JUICE', 'WATER', 'BEER', 'WINE',
-      // Names/people
-      'ALEX', 'BOB', 'JOHN', 'MIKE', 'DAVE', 'TOM', 'JIM', 'SAM', 'DAN',
-      // Short/common words
-      'OK', 'YES', 'NO', 'GO', 'UP', 'DOWN', 'IN', 'OUT', 'ON', 'OFF',
-      // Additional common patterns
-      'COINBASE', 'CBXRP', 'EVERYONE', 'IS', 'FOR', 'BY', 'OF', 'THE', 'AND',
-      // More common patterns
-      'COIN', 'TOKEN', 'USD', 'USDC', 'USDT', 'ETH', 'BTC', 'DAI',
-      // Popular words
-      'LUCK', 'FORTUNE', 'RICH', 'MONEY', 'CASH', 'GOLD', 'DIAMOND',
-      // Gaming/entertainment
-      'GAME', 'PLAY', 'FUN', 'JOY', 'HAPPY', 'SMILE', 'LAUGH',
-      // Tech terms
-      'TECH', 'AI', 'ML', 'NFT', 'DEFI', 'WEB3', 'CRYPTO',
-      // Animals
-      'CAT', 'DOG', 'BIRD', 'FISH', 'LION', 'TIGER', 'BEAR', 'BULL',
-      // Food
-      'PIZZA', 'BURGER', 'COFFEE', 'TEA', 'WATER', 'JUICE',
-      // Nature
-      'TREE', 'FLOWER', 'SUN', 'MOON', 'STAR', 'EARTH', 'FIRE', 'WATER'
-    ]
-    
-    // 🚀 OPTIMIZATION: Parallel searches with increased concurrency
-    const searchPromises = searchTerms.map(async (term) => {
-      try {
-        const response = await fetchWithTimeout(
-          `https://api.dexscreener.com/latest/dex/search?q=${term}`,
-          {},
-          1000
-        )
+    try {
+      // Get ALL Base pairs with comprehensive parameters
+      const allTokensResponse = await fetchWithTimeout(
+        'https://api.dexscreener.com/latest/dex/pairs/base?limit=2000',
+        {},
+        10000
+      )
+      
+      if (allTokensResponse.ok) {
+        const allTokensData = await allTokensResponse.json()
         
-        if (response.ok) {
-          const data = await response.json()
-          const termTokens: TokenInfo[] = []
+        if (allTokensData.pairs && Array.isArray(allTokensData.pairs)) {
+          console.log(`📊 Found ${allTokensData.pairs.length} total Base pairs`)
           
-          if (data.pairs && Array.isArray(data.pairs)) {
-            // Get top 20 results per search for maximum coverage
-            const topResults = data.pairs.slice(0, 20)
-            
-            topResults.forEach((pair: any) => {
-              const isBaseNetwork = pair.chainId === 'base' || pair.chainId === '8453' || pair.chainId === 8453
+          allTokensData.pairs.forEach((pair: any) => {
+            if (pair.baseToken?.address && pair.priceUsd) {
+              const address = pair.baseToken.address.toLowerCase()
               
-              if (isBaseNetwork && pair.baseToken?.address) {
-                const address = pair.baseToken.address.toLowerCase()
-                
-                if (!seenAddresses.has(address)) {
-                  seenAddresses.add(address)
-                  termTokens.push({
-                    address,
-                    symbol: pair.baseToken.symbol || 'UNKNOWN',
-                    name: pair.baseToken.name || 'Unknown Token',
-                    decimals: parseInt(pair.baseToken.decimals) || 18,
-                    price: parseFloat(pair.priceUsd || '0'),
-                    source: 'dexscreener-live-search'
-                  })
-                }
+              if (!seenAddresses.has(address)) {
+                seenAddresses.add(address)
+                tokens.push({
+                  address,
+                  symbol: pair.baseToken.symbol || 'UNKNOWN',
+                  name: pair.baseToken.name || 'Unknown Token',
+                  decimals: parseInt(pair.baseToken.decimals) || 18,
+                  price: parseFloat(pair.priceUsd),
+                  source: 'dexscreener-comprehensive'
+                })
               }
-            })
-          }
+            }
+          })
           
-          return termTokens
+          console.log(`✅ Added ${tokens.length} unique tokens from comprehensive fetch`)
         }
-      } catch (error) {
-        console.warn(`⚠️ Live search "${term}" failed:`, error)
-        return []
       }
-      return []
-    })
-    
-    // Execute all searches in parallel
-    const searchResults = await Promise.allSettled(searchPromises)
-    
-    searchResults.forEach((result) => {
-      if (result.status === 'fulfilled') {
-        tokens.push(...result.value)
-      }
-    })
+    } catch (error) {
+      console.warn('⚠️ Comprehensive token fetch failed:', error)
+    }
 
     // Method 3: Get LIVE new token listings
     try {
@@ -332,49 +265,7 @@ const fetchLiveDynamicTokens = async (): Promise<TokenInfo[]> => {
       console.warn('⚠️ Recent tokens failed:', error)
     }
 
-    // Method 7: Specific search for Zora creator coins and deployment tokens
-    try {
-      console.log('🎨 Fetching Zora creator coins and deployment tokens...')
-      const zoraSearchTerms = ['ZORA', 'CREATOR', 'CLANK', 'CLANKR', 'DEPLOY', 'DEPLOYMENT', 'COIN']
-      
-      for (const term of zoraSearchTerms) {
-        try {
-          const zoraResponse = await fetchWithTimeout(
-            `https://api.dexscreener.com/latest/dex/search?q=${term}`,
-            {},
-            3000
-          )
-          
-          if (zoraResponse.ok) {
-            const zoraData = await zoraResponse.json()
-            
-            if (zoraData.pairs && Array.isArray(zoraData.pairs)) {
-              zoraData.pairs.forEach((pair: any) => {
-                if (pair.baseToken?.address && pair.priceUsd && pair.chainId === 'base') {
-                  const address = pair.baseToken.address.toLowerCase()
-                  
-                  if (!seenAddresses.has(address)) {
-                    seenAddresses.add(address)
-                    tokens.push({
-                      address,
-                      symbol: pair.baseToken.symbol || 'UNKNOWN',
-                      name: pair.baseToken.name || 'Unknown Token',
-                      decimals: parseInt(pair.baseToken.decimals) || 18,
-                      price: parseFloat(pair.priceUsd),
-                      source: `dexscreener-zora-${term.toLowerCase()}`
-                    })
-                  }
-                }
-              })
-            }
-          }
-        } catch (error) {
-          console.warn(`⚠️ Zora search for ${term} failed:`, error)
-        }
-      }
-    } catch (error) {
-      console.warn('⚠️ Zora creator coins search failed:', error)
-    }
+    // Method 7: Removed - now covered by comprehensive fetch above
     
     console.log(`✅ LIVE dynamic discovery found ${tokens.length} tokens`)
     return tokens
