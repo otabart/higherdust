@@ -154,8 +154,20 @@ export function useComprehensiveTokenDetection() {
         
         console.log(`📋 Found ${tokenAddresses.size} unique tokens from Transfer events`)
         
-      } catch (error) {
+      } catch (error: any) {
         console.error('❌ Transfer event scan failed:', error)
+        
+        // Check if it's an RPC error with undefined result
+        if (error?.response?.data) {
+          const responseData = error.response.data
+          console.error('🔍 RPC Error Details:', {
+            error: responseData.error,
+            message: responseData.message,
+            code: responseData.code,
+            raw: responseData
+          })
+        }
+        
         console.log('📋 No tokens found - user may not have interacted with any tokens recently')
         return allTokens // Return only ETH if any
       }
@@ -190,6 +202,18 @@ export function useComprehensiveTokenDetection() {
         
         // All retries failed - skip this token
         console.warn(`⚠️ Failed to get balance for ${address} after 3 retries:`, lastError)
+        
+        // Log RPC error details if available
+        if (lastError?.response?.data) {
+          const responseData = lastError.response.data
+          console.error('🔍 RPC Balance Check Error:', {
+            address,
+            error: responseData.error,
+            message: responseData.message,
+            code: responseData.code
+          })
+        }
+        
         return null
       })
 

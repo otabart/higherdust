@@ -8,47 +8,36 @@ console.log('🔧 WAGMI CONFIG - Production Setup:')
 // Environment variables with fallbacks
 const walletConnectProjectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '84387a208a33faa3a607f56ffe1e07b5'
 const appName = process.env.NEXT_PUBLIC_APP_NAME || 'SWAPDUST'
-const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://swapdust.vercel.app'
 
 console.log(`  WalletConnect Project ID: ${walletConnectProjectId ? 'SET' : 'MISSING'}`)
 console.log(`  App Name: ${appName}`)
 console.log(`  App URL: ${appUrl}`)
 
-// RPC Configuration with fallbacks and retry logic
+// RPC Configuration with paid Alchemy and fallback
 const getRpcUrl = () => {
-  // Priority: Alchemy > QuickNode > Infura > Public RPCs
+  // Priority: Alchemy (paid) > 1rpc.io (fallback)
+  if (process.env.NEXT_PUBLIC_BASE_RPC_URL) {
+    return process.env.NEXT_PUBLIC_BASE_RPC_URL
+  }
+  
   if (process.env.NEXT_PUBLIC_ALCHEMY_API_KEY) {
     return `https://base-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`
   }
   
-  if (process.env.NEXT_PUBLIC_QUICKNODE_URL) {
-    return process.env.NEXT_PUBLIC_QUICKNODE_URL
-  }
-  
-  if (process.env.NEXT_PUBLIC_INFURA_PROJECT_ID) {
-    return `https://base-mainnet.infura.io/v3/${process.env.NEXT_PUBLIC_INFURA_PROJECT_ID}`
-  }
-  
-  // Fallback to public RPCs
-  const publicRpcs = [
-    'https://mainnet.base.org',
-    'https://base.blockpi.network/v1/rpc/public',
-    'https://1rpc.io/base'
-  ]
-  
-  return publicRpcs[0] // Use first public RPC as fallback
+  // Fallback to 1rpc.io
+  return 'https://1rpc.io/base'
 }
 
 // Create transport with retry logic and exponential backoff
 const createRetryTransport = () => {
   const rpcUrl = getRpcUrl()
   console.log('🔧 RPC Configuration:')
+  console.log('  Base RPC URL:', process.env.NEXT_PUBLIC_BASE_RPC_URL ? 'SET' : 'MISSING')
   console.log('  Alchemy API Key:', process.env.NEXT_PUBLIC_ALCHEMY_API_KEY ? 'SET' : 'MISSING')
-  console.log('  QuickNode URL:', process.env.NEXT_PUBLIC_QUICKNODE_URL ? 'SET' : 'MISSING')
-  console.log('  Infura Project ID:', process.env.NEXT_PUBLIC_INFURA_PROJECT_ID ? 'SET' : 'MISSING')
   console.log('  RPC URL:', rpcUrl)
-  console.log('🌐 Using RPC:', rpcUrl.includes('alchemy') ? 'Alchemy' : rpcUrl.includes('quicknode') ? 'QuickNode' : rpcUrl.includes('infura') ? 'Infura' : 'Public RPC')
-console.log('✅ RPC Configuration loaded successfully!')
+  console.log('🌐 Using RPC:', rpcUrl.includes('alchemy') ? 'Alchemy' : rpcUrl.includes('1rpc.io') ? '1rpc.io' : 'Custom RPC')
+  console.log('✅ RPC Configuration loaded successfully!')
   
   return http(rpcUrl, {
     retryCount: 3,
