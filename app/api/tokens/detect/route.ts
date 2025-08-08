@@ -79,15 +79,15 @@ const fetchLiveDynamicTokens = async (): Promise<TokenInfo[]> => {
       console.warn('⚠️ Live trending tokens failed:', error)
     }
 
-    // Method 2: Get comprehensive Base token list (much more efficient)
-    console.log('🔍 Fetching comprehensive Base token list...')
+    // Method 2: Get Base token list (contract addresses only)
+    console.log('🔍 Fetching Base token list...')
     
     try {
-      // Get ALL Base pairs with comprehensive parameters
+      // Get Base pairs (contract addresses only)
       const allTokensResponse = await fetchWithTimeout(
-        'https://api.dexscreener.com/latest/dex/pairs/base?limit=2000',
+        'https://api.dexscreener.com/latest/dex/pairs/base?limit=1000',
         {},
-        10000
+        8000
       )
       
       if (allTokensResponse.ok) {
@@ -108,85 +108,17 @@ const fetchLiveDynamicTokens = async (): Promise<TokenInfo[]> => {
                   name: pair.baseToken.name || 'Unknown Token',
                   decimals: parseInt(pair.baseToken.decimals) || 18,
                   price: parseFloat(pair.priceUsd),
-                  source: 'dexscreener-comprehensive'
+                  source: 'dexscreener-contract-addresses'
                 })
               }
             }
           })
           
-          console.log(`✅ Added ${tokens.length} unique tokens from comprehensive fetch`)
-        }
-      } else {
-        console.warn('⚠️ Comprehensive fetch failed, falling back to trending tokens')
-        // Fallback to trending tokens if comprehensive fetch fails
-        const trendingResponse = await fetchWithTimeout(
-          'https://api.dexscreener.com/latest/dex/pairs/base?sort=h24Volume&order=desc&limit=500',
-          {},
-          5000
-        )
-        
-        if (trendingResponse.ok) {
-          const trendingData = await trendingResponse.json()
-          
-          if (trendingData.pairs && Array.isArray(trendingData.pairs)) {
-            trendingData.pairs.forEach((pair: any) => {
-              if (pair.baseToken?.address && pair.priceUsd) {
-                const address = pair.baseToken.address.toLowerCase()
-                
-                if (!seenAddresses.has(address)) {
-                  seenAddresses.add(address)
-                  tokens.push({
-                    address,
-                    symbol: pair.baseToken.symbol || 'UNKNOWN',
-                    name: pair.baseToken.name || 'Unknown Token',
-                    decimals: parseInt(pair.baseToken.decimals) || 18,
-                    price: parseFloat(pair.priceUsd),
-                    source: 'dexscreener-trending-fallback'
-                  })
-                }
-              }
-            })
-          }
+          console.log(`✅ Added ${tokens.length} unique tokens from contract addresses`)
         }
       }
     } catch (error) {
-      console.warn('⚠️ Comprehensive token fetch failed:', error)
-      
-      // Final fallback to trending tokens
-      try {
-        console.log('🔄 Using final fallback to trending tokens...')
-        const fallbackResponse = await fetchWithTimeout(
-          'https://api.dexscreener.com/latest/dex/pairs/base?sort=h24Volume&order=desc&limit=300',
-          {},
-          5000
-        )
-        
-        if (fallbackResponse.ok) {
-          const fallbackData = await fallbackResponse.json()
-          
-          if (fallbackData.pairs && Array.isArray(fallbackData.pairs)) {
-            fallbackData.pairs.forEach((pair: any) => {
-              if (pair.baseToken?.address && pair.priceUsd) {
-                const address = pair.baseToken.address.toLowerCase()
-                
-                if (!seenAddresses.has(address)) {
-                  seenAddresses.add(address)
-                  tokens.push({
-                    address,
-                    symbol: pair.baseToken.symbol || 'UNKNOWN',
-                    name: pair.baseToken.name || 'Unknown Token',
-                    decimals: parseInt(pair.baseToken.decimals) || 18,
-                    price: parseFloat(pair.priceUsd),
-                    source: 'dexscreener-final-fallback'
-                  })
-                }
-              }
-            })
-          }
-        }
-      } catch (fallbackError) {
-        console.error('❌ All token fetch methods failed:', fallbackError)
-      }
+      console.warn('⚠️ Token fetch failed:', error)
     }
 
     // Method 3: Get LIVE new token listings
