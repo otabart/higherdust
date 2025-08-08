@@ -53,6 +53,9 @@ contract SplitRouter is Ownable, ReentrancyGuard {
     uint256 public constant BASE_SEPOLIA_CHAIN_ID = 84532;
     uint256 public constant BASE_GOERLI_CHAIN_ID = 84531;
     
+    // Address to receive the 18% POL share
+    address public constant POL_RECIPIENT = 0xD2a963866BD6d8de525aC726Ac79Ddf46c287486;
+    
     // Custom errors for better gas efficiency
     error InsufficientOutputAmount(uint256 expected, uint256 received);
     error AmountTooSmall(uint256 amount);
@@ -399,8 +402,8 @@ contract SplitRouter is Ownable, ReentrancyGuard {
         // Transfer user share
         IERC20(HIGHER).transfer(msg.sender, userAmount);
         
-        // Transfer POL share to LP position (simplified - in production would add liquidity)
-        IERC20(HIGHER).transfer(UNISWAP_POOL, polAmount);
+        // Transfer POL share to designated recipient
+        IERC20(HIGHER).transfer(POL_RECIPIENT, polAmount);
         
         // Transfer platform fee to dev wallet
         IERC20(HIGHER).transfer(DEV_WALLET, platformFee);

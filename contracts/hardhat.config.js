@@ -1,6 +1,19 @@
 require("@nomicfoundation/hardhat-toolbox");
 require("dotenv").config();
 
+const getBaseRPC = () => {
+    // Try multiple RPC endpoints in priority order
+    const endpoints = [
+        `https://base-mainnet.g.alchemy.com/v2/dTxr0wyeId8QtiuPENJXt`,
+        "https://base-rpc.publicnode.com",
+        "https://base.llamarpc.com",
+        "https://mainnet.base.org",
+        "https://1rpc.io/base"
+    ];
+    
+    return endpoints[0]; // Use first available, add logic to test them
+};
+
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
   solidity: {
@@ -14,7 +27,20 @@ module.exports = {
   },
   networks: {
     base: {
-      url: process.env.BASE_RPC_URL || "https://mainnet.base.org",
+      url: getBaseRPC(),
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      chainId: 8453,
+      gasPrice: "auto",
+      timeout: 60000, // Increase timeout
+    },
+    // Backup network configs
+    base_publicnode: {
+      url: "https://base-rpc.publicnode.com",
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      chainId: 8453,
+    },
+    base_llama: {
+      url: "https://base.llamarpc.com", 
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
       chainId: 8453,
     },

@@ -1,7 +1,7 @@
 // Contract addresses (Base Sepolia Testnet)
 export const CONTRACT_ADDRESSES = {
   // Base Mainnet - Deployed contracts
-  SPLIT_ROUTER: "0x44bF14251aC9e798B892FEF884b55259E4d58eB7",
+  SPLIT_ROUTER: "0x387c8227382e14D908F1959ce6eC22df227F229A", // NEW: Updated POL recipient contract
   HIGHER_TOKEN: "0x0578d8A44db98B23BF096A382e016e29a5Ce0ffe",
   
       // Uniswap V3 on Base mainnet

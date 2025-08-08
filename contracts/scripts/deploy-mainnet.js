@@ -14,6 +14,7 @@ async function main() {
 
   // Base Mainnet Network Addresses
   const UNISWAP_V3_ROUTER = "0x2626664c2603336E57B271c5C0b26F421741e481";
+  const UNISWAP_V3_QUOTER = "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a";
   const UNISWAP_V3_POSITION_MANAGER = "0x03a520b32c04bf3be551fcac6619c22f1b9c6fd6";
   const HIGHER_TOKEN = "0x0578d8A44db98B23BF096A382e016e29a5Ce0ffe"; // Real $HIGHER token
   const WETH = "0x4200000000000000000000000000000000000006";
@@ -23,6 +24,7 @@ async function main() {
 
   console.log("\n📋 Contract Addresses:");
   console.log("Uniswap V3 Router:", UNISWAP_V3_ROUTER);
+  console.log("Uniswap V3 Quoter:", UNISWAP_V3_QUOTER);
   console.log("Uniswap V3 Position Manager:", UNISWAP_V3_POSITION_MANAGER);
   console.log("HIGHER Token:", HIGHER_TOKEN);
   console.log("WETH:", WETH);
@@ -38,7 +40,15 @@ async function main() {
 
   console.log("\n🔧 Deploying SplitRouter...");
   const SplitRouter = await ethers.getContractFactory("SplitRouter");
-  const router = await SplitRouter.deploy(HIGHER_TOKEN, WETH, ETH_HIGHER_POOL, UNISWAP_V3_ROUTER, UNISWAP_V3_POSITION_MANAGER);
+  const router = await SplitRouter.deploy(
+    HIGHER_TOKEN,
+    WETH,
+    ETH_HIGHER_POOL,
+    UNISWAP_V3_ROUTER,
+    UNISWAP_V3_QUOTER,
+    UNISWAP_V3_POSITION_MANAGER,
+    DEV_WALLET
+  );
   await router.waitForDeployment();
   console.log("✅ SplitRouter deployed to:", await router.getAddress());
 
@@ -60,7 +70,7 @@ async function main() {
     console.log("Attempting to verify SplitRouter...");
     await hre.run("verify:verify", {
       address: await router.getAddress(),
-      constructorArguments: [HIGHER_TOKEN, WETH, ETH_HIGHER_POOL, UNISWAP_V3_ROUTER, UNISWAP_V3_POSITION_MANAGER],
+      constructorArguments: [HIGHER_TOKEN, WETH, ETH_HIGHER_POOL, UNISWAP_V3_ROUTER, UNISWAP_V3_QUOTER, UNISWAP_V3_POSITION_MANAGER, DEV_WALLET],
       network: "base",
     });
     console.log("✅ SplitRouter verified on BaseScan");

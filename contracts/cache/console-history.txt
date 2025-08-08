@@ -1,0 +1,3 @@
+npx hardhat run scripts/check-balance.js --network base
+npx hardhat run scripts/deploy-custom.js --network base
+npx hardhat run -e "console.log('Balance:', ethers.formatEther(await ethers.provider.getBalance('0x0B3520A5C09f27c6ac7702e74a751583024d81A2')))" --network base
