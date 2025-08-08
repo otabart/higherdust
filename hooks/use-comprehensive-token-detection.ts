@@ -292,23 +292,23 @@ export function useComprehensiveTokenDetection() {
         }
       })
       
-      // Step 9: Filter to tokens between $0.1-$3 USD (dust range)
-      const dustTokens = finalTokens.filter(token => {
+      // Step 9: Filter to tokens >= $0.10 USD (new minimum for selection)
+      const eligibleTokens = finalTokens.filter(token => {
         const value = token.valueUSD || 0
-        return value >= 0.1 && value <= 3.0
+        return value >= 0.1
       })
       
-      console.log(`💸 Found ${dustTokens.length} tokens between $0.1-$3 USD`)
+      console.log(`💸 Found ${eligibleTokens.length} tokens with value >= $0.10 USD`)
       
       // Cache the results
       if (userAddress) {
         memoryCache[userAddress.toLowerCase()] = {
-          tokens: dustTokens,
+          tokens: eligibleTokens,
           timestamp: Date.now()
         }
       }
       
-      setTokens(dustTokens)
+      setTokens(eligibleTokens)
       
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {

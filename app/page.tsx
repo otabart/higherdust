@@ -92,6 +92,12 @@ function SwapDustInterface() {
   const [isSwapping, setIsSwapping] = useState(false)
   const [selectedTokens, setSelectedTokens] = useState<string[]>([])
   const [approvalStatus, setApprovalStatus] = useState<string>('')
+  const [swapValidation, setSwapValidation] = useState<{
+    isValid: boolean
+    message: string
+    totalValue: number
+    hasExceedsLimit: boolean
+  }>({ isValid: false, message: '', totalValue: 0, hasExceedsLimit: false })
   const [approvalTxHash, setApprovalTxHash] = useState<string>('')
   const [isApproving, setIsApproving] = useState(false)
 
@@ -180,12 +186,19 @@ function SwapDustInterface() {
   }
 
   const toggleSelectAll = () => {
-    const allAddresses = dustTokens.map((token) => token.address)
-    setSelectedTokens((prev) => (prev.length === allAddresses.length ? [] : allAddresses))
+    // Only select tokens that don't exceed the $5.00 limit
+    const eligibleAddresses = dustTokens
+      .filter(token => (token.valueUSD || 0) <= 5.0)
+      .map((token) => token.address)
+    
+    setSelectedTokens((prev) => (
+      prev.length === eligibleAddresses.length ? [] : eligibleAddresses
+    ))
   }
 
-  const isAllSelected = selectedTokens.length === dustTokens.length
-  const isPartiallySelected = selectedTokens.length > 0 && selectedTokens.length < dustTokens.length
+  const eligibleTokens = dustTokens.filter(token => (token.valueUSD || 0) <= 5.0)
+  const isAllSelected = selectedTokens.length === eligibleTokens.length && eligibleTokens.length > 0
+  const isPartiallySelected = selectedTokens.length > 0 && selectedTokens.length < eligibleTokens.length
 
   // Calculate totals for selected tokens only
   const selectedTokensData = dustTokens.filter((token) => selectedTokens.includes(token.address))
@@ -194,6 +207,66 @@ function SwapDustInterface() {
   const liquidityAmount = totalValue * 0.2
   const netAfterFees = totalValue * 0.997 // After 0.3% DEX fee
   const minReceived = higherAmount * 0.97 // 3% slippage protection
+
+  // Real-time swap validation logic
+  useEffect(() => {
+    const validateSwap = () => {
+      if (selectedTokens.length === 0) {
+        setSwapValidation({
+          isValid: false,
+          message: '',
+          totalValue: 0,
+          hasExceedsLimit: false
+        })
+        return
+      }
+
+      // Check for individual tokens exceeding $5.00 limit
+      const tokensExceedingLimit = selectedTokensData.filter(token => (token.valueUSD || 0) > 5.0)
+      
+      if (tokensExceedingLimit.length > 0) {
+        const tokenNames = tokensExceedingLimit.map(token => token.symbol).join(', ')
+        setSwapValidation({
+          isValid: false,
+          message: `One or more tokens exceed the $5.00 per-token limit: ${tokenNames}. Please deselect those tokens.`,
+          totalValue,
+          hasExceedsLimit: true
+        })
+        return
+      }
+
+      // Check total value constraints
+      if (totalValue < 2.0) {
+        setSwapValidation({
+          isValid: false,
+          message: `Your selected tokens total $${totalValue.toFixed(2)}. Please select more tokens to reach the $2.00 minimum.`,
+          totalValue,
+          hasExceedsLimit: false
+        })
+        return
+      }
+
+      if (totalValue > 5.0) {
+        setSwapValidation({
+          isValid: false,
+          message: `Your selected tokens total $${totalValue.toFixed(2)}. Please remove some tokens to stay under the $5.00 maximum.`,
+          totalValue,
+          hasExceedsLimit: false
+        })
+        return
+      }
+
+      // All validation passed
+      setSwapValidation({
+        isValid: true,
+        message: '',
+        totalValue,
+        hasExceedsLimit: false
+      })
+    }
+
+    validateSwap()
+  }, [selectedTokens, selectedTokensData, totalValue])
 
   useEffect(() => {
     if (isSuccess && hash) {
@@ -1402,7 +1475,13 @@ function SwapDustInterface() {
             <div className="flex justify-between items-center mb-4">
               <div>
                 <h2 className="font-mono text-sm uppercase tracking-wider text-foreground">Tokens</h2>
-                <p className="font-mono text-xs text-muted-foreground mt-1">Under $3.00</p>
+                <p className="font-mono text-xs text-muted-foreground mt-1">
+                  {dustTokens.length > 0 && (
+                    <>
+                      {eligibleTokens.length} eligible • {dustTokens.length - eligibleTokens.length} over $5.00 limit
+                    </>
+                  )}
+                </p>
               </div>
                           <div className="flex gap-2">
                 <Button
@@ -1434,9 +1513,10 @@ function SwapDustInterface() {
                   variant="ghost"
                   size="sm"
                   onClick={toggleSelectAll}
-                  className="h-8 px-3 font-mono text-xs text-muted-foreground hover:text-foreground"
+                  disabled={eligibleTokens.length === 0}
+                  className="h-8 px-3 font-mono text-xs text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {isAllSelected ? "Clear" : "All"}
+                  {isAllSelected ? "Clear" : `All (${eligibleTokens.length})`}
                 </Button>
 
               </div>
@@ -1455,33 +1535,56 @@ function SwapDustInterface() {
                 </div>
               ) : (
                                <div className="divide-y divide-border">
-                 {dustTokens.map((token, index) => (
-                   <div key={index} className="flex items-center gap-4 py-3 hover:bg-muted/30 transition-colors">
-                     <input
-                       type="checkbox"
-                       id={`token-${index}`}
-                       checked={selectedTokens.includes(token.address)}
-                       onChange={() => toggleTokenSelection(token.address)}
-                       className="flex-shrink-0"
-                     />
-                     <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
-                       <span className="font-mono text-xs text-muted-foreground">{token.symbol[0]}</span>
-                     </div>
-                     <div className="flex-1 min-w-0">
-                       <label htmlFor={`token-${index}`} className="font-mono text-sm text-foreground cursor-pointer block truncate">
-                         {token.symbol}
-                       </label>
-                     </div>
-                     <div className="text-right">
-                       <div className="font-mono text-xs text-foreground">
-                         {token.balanceFormatted ? parseFloat(token.balanceFormatted).toFixed(4) : '0.0000'}
+                 {dustTokens.map((token, index) => {
+                   const tokenValue = token.valueUSD || 0
+                   const exceedsLimit = tokenValue > 5.0
+                   const isSelected = selectedTokens.includes(token.address)
+                   
+                   return (
+                     <div key={index} className={`flex items-center gap-4 py-3 transition-colors ${
+                       exceedsLimit ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-muted/30'
+                     } ${isSelected ? 'bg-green-50' : ''}`}>
+                       <input
+                         type="checkbox"
+                         id={`token-${index}`}
+                         checked={isSelected}
+                         onChange={() => toggleTokenSelection(token.address)}
+                         disabled={exceedsLimit}
+                         className="flex-shrink-0"
+                       />
+                       <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                         exceedsLimit ? 'bg-red-200' : isSelected ? 'bg-green-200' : 'bg-muted'
+                       }`}>
+                         <span className={`font-mono text-xs ${
+                           exceedsLimit ? 'text-red-700' : isSelected ? 'text-green-700' : 'text-muted-foreground'
+                         }`}>
+                           {token.symbol[0]}
+                         </span>
                        </div>
-                       <div className="font-mono text-xs text-muted-foreground">
-                         ${token.valueUSD ? token.valueUSD.toFixed(2) : '0.00'}
+                       <div className="flex-1 min-w-0">
+                         <label htmlFor={`token-${index}`} className={`font-mono text-sm cursor-pointer block truncate ${
+                           exceedsLimit ? 'text-red-600 line-through' : 'text-foreground'
+                         }`}>
+                           {token.symbol}
+                         </label>
+                         {exceedsLimit && (
+                           <p className="font-mono text-xs text-red-500">Exceeds $5.00 limit</p>
+                         )}
+                       </div>
+                       <div className="text-right">
+                         <div className="font-mono text-xs text-foreground">
+                           {token.balanceFormatted ? parseFloat(token.balanceFormatted).toFixed(4) : '0.0000'}
+                         </div>
+                         <div className={`font-mono text-xs ${
+                           exceedsLimit ? 'text-red-600 font-semibold' : 'text-muted-foreground'
+                         }`}>
+                           ${tokenValue.toFixed(2)}
+                           {exceedsLimit && ' 🚫'}
+                         </div>
                        </div>
                      </div>
-                   </div>
-                 ))}
+                   )
+                 })}
                </div>
               )}
             </div>
@@ -1501,19 +1604,58 @@ function SwapDustInterface() {
           {/* CTA Section */}
           {selectedTokens.length > 0 && (
             <div className="text-center space-y-4">
+              {/* Validation Message */}
+              {!swapValidation.isValid && swapValidation.message && (
+                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                  <p className="font-mono text-xs text-yellow-700">
+                    {swapValidation.message}
+                  </p>
+                </div>
+              )}
+              
+              {/* Success Message */}
+              {swapValidation.isValid && (
+                <div className="p-3 bg-green-50 border border-green-200 rounded-md">
+                  <p className="font-mono text-xs text-green-700">
+                    Ready to swap! Total value: ${swapValidation.totalValue.toFixed(2)}
+                  </p>
+                </div>
+              )}
+
               <Button
                 onClick={handleSwap}
-                disabled={isLoading || selectedTokens.length === 0}
-                className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-mono text-sm tracking-wide rounded-none"
+                disabled={isLoading || !swapValidation.isValid}
+                className={`w-full h-12 font-mono text-sm tracking-wide rounded-none transition-all ${
+                  swapValidation.isValid 
+                    ? 'bg-green-600 hover:bg-green-700 text-white' 
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
               >
                 {isLoading ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
+                ) : swapValidation.isValid ? (
+                  `Convert ${selectedTokens.length} token${selectedTokens.length === 1 ? '' : 's'} ($${swapValidation.totalValue.toFixed(2)})`
                 ) : (
-                  `Convert ${selectedTokens.length} token${selectedTokens.length === 1 ? '' : 's'}`
+                  'Select tokens to swap'
                 )}
               </Button>
+              
+              {swapValidation.isValid && (
+                <p className="font-mono text-xs text-muted-foreground">
+                  Receive ≈ ${netAfterFees.toFixed(2)} HIGHER
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Help Text */}
+          {selectedTokens.length === 0 && dustTokens.length > 0 && (
+            <div className="text-center space-y-2 py-4">
               <p className="font-mono text-xs text-muted-foreground">
-                Receive ≈ ${netAfterFees.toFixed(2)} HIGHER
+                Select tokens worth $2.00 - $5.00 total to start swapping
+              </p>
+              <p className="font-mono text-xs text-muted-foreground">
+                Individual tokens must be ≤ $5.00 each
               </p>
             </div>
           )}
