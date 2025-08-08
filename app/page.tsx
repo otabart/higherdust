@@ -86,7 +86,18 @@ function SwapDustInterface() {
   const { address, isConnected, chainId } = useAccount()
   const { disconnect } = useDisconnect()
   const publicClient = usePublicClient()
-  const { tokens: dustTokens, isLoading: isDetecting, refetch: detectTokens } = useComprehensiveTokenDetection()
+  const {
+    tokens: dustTokens,
+    selectedTokens: hookSelectedTokens,
+    isLoading: isDetecting,
+    error: detectionError,
+    swapValidation: hookSwapValidation,
+    detectTokens,
+    toggleTokenSelection,
+    selectAllTokens,
+    deselectAllTokens,
+    getSelectedTokens
+  } = useComprehensiveTokenDetection()
   const { switchChain } = useSwitchChain()
   const [isFactsOpen, setIsFactsOpen] = useState(false)
   const [isSwapping, setIsSwapping] = useState(false)
@@ -179,11 +190,7 @@ function SwapDustInterface() {
     hash,
   })
 
-  const toggleTokenSelection = (tokenAddress: string) => {
-    setSelectedTokens((prev) =>
-      prev.includes(tokenAddress) ? prev.filter((addr) => addr !== tokenAddress) : [...prev, tokenAddress],
-    )
-  }
+  // Use toggleTokenSelection from the hook instead
 
   const toggleSelectAll = () => {
     // Since hook filters to $0.10-$5.00, all tokens are eligible

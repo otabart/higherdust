@@ -1,81 +1,113 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { useAccount, usePublicClient } from 'wagmi'
 import { formatUnits } from 'viem'
 
+// Types for the new MVP flow
 interface TokenInfo {
-  address: string
-  symbol: string
-  name: string
-  decimals: number
-  price?: number
-  source: string
-}
-
-interface TokenBalance {
   address: string
   symbol: string
   name: string
   decimals: number
   balance: bigint
   balanceFormatted: string
-  price?: number
+  priceUSD?: number
   valueUSD?: number
-  source: string
+  isEligible: boolean
+  error?: string
 }
 
-// ERC-20 ABI for balance checking
+interface TokenSelection {
+  [address: string]: boolean
+}
+
+interface SwapValidation {
+  isValid: boolean
+  message: string
+  totalValue: number
+  selectedCount: number
+}
+
+// ERC-20 ABI for token operations
 const ERC20_ABI = [
   {
+    constant: true,
+    inputs: [{ name: '_owner', type: 'address' }],
     name: 'balanceOf',
-    type: 'function',
-    inputs: [{ name: 'account', type: 'address' }],
-    outputs: [{ type: 'uint256' }],
-    stateMutability: 'view',
+    outputs: [{ name: 'balance', type: 'uint256' }],
+    type: 'function'
   },
+  {
+    constant: true,
+    inputs: [],
+    name: 'decimals',
+    outputs: [{ name: '', type: 'uint8' }],
+    type: 'function'
+  },
+  {
+    constant: true,
+    inputs: [],
+    name: 'symbol',
+    outputs: [{ name: '', type: 'string' }],
+    type: 'function'
+  },
+  {
+    constant: true,
+    inputs: [],
+    name: 'name',
+    outputs: [{ name: '', type: 'string' }],
+    type: 'function'
+  }
 ] as const
 
-// Cache for token detection results
-const MEMORY_CACHE_DURATION = 3 * 60 * 1000 // 3 minutes
-let memoryCache: {
-  [userAddress: string]: {
-    tokens: TokenBalance[]
-    timestamp: number
-  }
-} = {}
+// Cache duration for performance
+const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
+const memoryCache: { [key: string]: { tokens: TokenInfo[], timestamp: number } } = {}
 
 export function useComprehensiveTokenDetection() {
   const { address: userAddress, isConnected } = useAccount()
   const publicClient = usePublicClient()
-  const [tokens, setTokens] = useState<TokenBalance[]>([])
+  
+  const [tokens, setTokens] = useState<TokenInfo[]>([])
+  const [selectedTokens, setSelectedTokens] = useState<TokenSelection>({})
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [swapValidation, setSwapValidation] = useState<SwapValidation>({
+    isValid: false,
+    message: '',
+    totalValue: 0,
+    selectedCount: 0
+  })
+  
   const abortControllerRef = useRef<AbortController | null>(null)
 
   // Check for cached tokens
-  const getCachedTokens = useCallback((): TokenBalance[] | null => {
+  const getCachedTokens = useCallback((): TokenInfo[] | null => {
     if (!userAddress) return null
     
     const cached = memoryCache[userAddress.toLowerCase()]
-    if (cached && Date.now() - cached.timestamp < MEMORY_CACHE_DURATION) {
+    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
       return cached.tokens
     }
     
     return null
   }, [userAddress])
 
-  // Dynamically scan wallet for ERC-20 tokens
-  const fetchAllWalletTokens = useCallback(async (signal: AbortSignal): Promise<{address: string, balance: bigint}[]> => {
+  // Efficient on-chain token scanning
+  const scanWalletTokens = useCallback(async (signal: AbortSignal): Promise<{address: string, balance: bigint}[]> => {
     if (!publicClient || !userAddress) {
       return []
     }
 
     try {
-      console.log('🔍 Dynamically scanning wallet for ERC-20 tokens...')
+      console.log('🔍 Scanning wallet for ERC-20 tokens...')
       
       // Get user's ETH balance
-      const ethBalance = await publicClient.getBalance({ address: userAddress as `0x${string}` })
+      const ethBalance = await publicClient.getBalance({ 
+        address: userAddress as `0x${string}` 
+      })
+      
       const allTokens: {address: string, balance: bigint}[] = []
       
       // Add ETH if user has any
@@ -85,120 +117,58 @@ export function useComprehensiveTokenDetection() {
           balance: ethBalance 
         })
       }
+
+      // Get ERC-20 tokens from Transfer events (efficient approach)
+      const currentBlock = await publicClient.getBlockNumber()
+      const fromBlock = currentBlock - BigInt(10000) // Last 10k blocks for performance
       
-      // Get user's ERC-20 Transfer events to find tokens they've interacted with
-      console.log('📊 Scanning Transfer events to find ERC-20 tokens...')
-      
-      try {
-        // Get Transfer events where user is recipient (received tokens)
-        const receivedLogs = await publicClient.getLogs({
-          address: userAddress as `0x${string}`,
-          event: {
-            type: 'event',
-            name: 'Transfer',
-            inputs: [
-              { type: 'address', name: 'from', indexed: true },
-              { type: 'address', name: 'to', indexed: true },
-              { type: 'uint256', name: 'value', indexed: false }
-            ]
-          },
-          fromBlock: 'earliest',
-          toBlock: 'latest'
-        })
-        
-        // Get Transfer events where user is sender (sent tokens)
-        const sentLogs = await publicClient.getLogs({
-          address: userAddress as `0x${string}`,
-          event: {
-            type: 'event',
-            name: 'Transfer',
-            inputs: [
-              { type: 'address', name: 'from', indexed: true },
-              { type: 'address', name: 'to', indexed: true },
-              { type: 'uint256', name: 'value', indexed: false }
-            ]
-          },
-          fromBlock: 'earliest',
-          toBlock: 'latest'
-        })
-        
-        // Extract unique token addresses from Transfer events
-        const tokenAddresses = new Set<string>()
-        
-        // Add addresses from received transfers
-        receivedLogs.forEach(log => {
-          if (log.topics && log.topics.length >= 3) {
-            const from = '0x' + log.topics[1].slice(26)
-            const to = '0x' + log.topics[2].slice(26)
-            if (to.toLowerCase() === userAddress.toLowerCase()) {
-              tokenAddresses.add(log.address.toLowerCase())
-            }
-          }
-        })
-        
-        // Add addresses from sent transfers
-        sentLogs.forEach(log => {
-          if (log.topics && log.topics.length >= 3) {
-            const from = '0x' + log.topics[1].slice(26)
-            const to = '0x' + log.topics[2].slice(26)
-            if (from.toLowerCase() === userAddress.toLowerCase()) {
-              tokenAddresses.add(log.address.toLowerCase())
-            }
-          }
-        })
-        
-        console.log(`📋 Found ${tokenAddresses.size} unique token addresses from Transfer events`)
-        
-        // Check current balances for all found tokens
-        const balancePromises = Array.from(tokenAddresses).map(async (address) => {
-          try {
-            const balance = await publicClient.readContract({
-              address: address as `0x${string}`,
-              abi: ERC20_ABI,
-              functionName: 'balanceOf',
-              args: [userAddress as `0x${string}`]
-            })
-            
-            return { address, balance: balance as bigint }
-          } catch (error) {
-            // Token might not exist or have issues
-            return null
-          }
-        })
-        
-        const balanceResults = await Promise.allSettled(balancePromises)
-        balanceResults.forEach((result) => {
-          if (result.status === 'fulfilled' && result.value && result.value.balance > BigInt(0)) {
-            allTokens.push(result.value)
-          }
-        })
-        
-      } catch (error) {
-        console.warn('⚠️ Error scanning Transfer events:', error)
-        // Fallback: check some common tokens if event scanning fails
-        const fallbackTokens = [
-          '0x4200000000000000000000000000000000000006', // WETH
-          '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // USDC
-        ]
-        
-        for (const address of fallbackTokens) {
-          try {
-            const balance = await publicClient.readContract({
-              address: address as `0x${string}`,
-              abi: ERC20_ABI,
-              functionName: 'balanceOf',
-              args: [userAddress as `0x${string}`]
-            })
-            
-            if (balance > BigInt(0)) {
-              allTokens.push({ address, balance: balance as bigint })
-            }
-          } catch (error) {
-            // Skip if token doesn't exist
-          }
+      const transferLogs = await publicClient.getLogs({
+        address: userAddress as `0x${string}`,
+        event: {
+          type: 'event',
+          name: 'Transfer',
+          inputs: [
+            { type: 'address', name: 'from', indexed: true },
+            { type: 'address', name: 'to', indexed: true },
+            { type: 'uint256', name: 'value', indexed: false }
+          ]
+        },
+        fromBlock,
+        toBlock: 'latest'
+      })
+
+      // Extract unique token addresses
+      const tokenAddresses = new Set<string>()
+      transferLogs.forEach(log => {
+        tokenAddresses.add(log.address.toLowerCase())
+      })
+
+      console.log(`📋 Found ${tokenAddresses.size} unique token addresses from Transfer events`)
+
+      // Check balances for found tokens
+      const balancePromises = Array.from(tokenAddresses).map(async (address) => {
+        try {
+          const balance = await publicClient.readContract({
+            address: address as `0x${string}`,
+            abi: ERC20_ABI,
+            functionName: 'balanceOf',
+            args: [userAddress as `0x${string}`]
+          })
+          
+          return { address, balance: balance as bigint }
+        } catch (error) {
+          // Token might not exist or have issues
+          return null
         }
-      }
-      
+      })
+
+      const balanceResults = await Promise.allSettled(balancePromises)
+      balanceResults.forEach((result) => {
+        if (result.status === 'fulfilled' && result.value && result.value.balance > BigInt(0)) {
+          allTokens.push(result.value)
+        }
+      })
+
       console.log(`💼 Found ${allTokens.length} tokens with balances > 0`)
       return allTokens
       
@@ -206,14 +176,17 @@ export function useComprehensiveTokenDetection() {
       if (error instanceof Error && error.name === 'AbortError') {
         throw error
       }
-      console.error('Error fetching wallet tokens:', error)
+      console.error('Error scanning wallet tokens:', error)
       return []
     }
   }, [publicClient, userAddress])
 
-  // Fetch token metadata (symbol, name, decimals) for given addresses
-  const fetchTokenMetadata = useCallback(async (addresses: string[], signal: AbortSignal): Promise<Map<string, {symbol: string, name: string, decimals: number}>> => {
-    if (!publicClient) {
+  // Fetch token metadata
+  const fetchTokenMetadata = useCallback(async (
+    addresses: string[], 
+    signal: AbortSignal
+  ): Promise<Map<string, {symbol: string, name: string, decimals: number}>> => {
+    if (!publicClient || addresses.length === 0) {
       return new Map()
     }
 
@@ -222,29 +195,23 @@ export function useComprehensiveTokenDetection() {
       
       const metadataMap = new Map<string, {symbol: string, name: string, decimals: number}>()
       
-      // ERC20 metadata ABI
-      const metadataABI = [
-        { name: 'symbol', type: 'function', inputs: [], outputs: [{ type: 'string' }], stateMutability: 'view' },
-        { name: 'name', type: 'function', inputs: [], outputs: [{ type: 'string' }], stateMutability: 'view' },
-        { name: 'decimals', type: 'function', inputs: [], outputs: [{ type: 'uint8' }], stateMutability: 'view' }
-      ] as const
-      
+      // Fetch metadata for each token
       const metadataPromises = addresses.map(async (address) => {
         try {
           const [symbol, name, decimals] = await Promise.all([
             publicClient.readContract({
               address: address as `0x${string}`,
-              abi: metadataABI,
+              abi: ERC20_ABI,
               functionName: 'symbol'
             }),
             publicClient.readContract({
               address: address as `0x${string}`,
-              abi: metadataABI,
+              abi: ERC20_ABI,
               functionName: 'name'
             }),
             publicClient.readContract({
               address: address as `0x${string}`,
-              abi: metadataABI,
+              abi: ERC20_ABI,
               functionName: 'decimals'
             })
           ])
@@ -258,7 +225,7 @@ export function useComprehensiveTokenDetection() {
             }
           }
         } catch (error) {
-          // Token might not support metadata or have issues
+          // Use defaults for failed metadata
           return {
             address: address.toLowerCase(),
             metadata: {
@@ -269,160 +236,115 @@ export function useComprehensiveTokenDetection() {
           }
         }
       })
-      
+
       const results = await Promise.allSettled(metadataPromises)
       results.forEach((result) => {
         if (result.status === 'fulfilled') {
           metadataMap.set(result.value.address, result.value.metadata)
         }
       })
-      
+
       console.log(`✅ Fetched metadata for ${metadataMap.size} tokens`)
       return metadataMap
       
     } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw error
-      }
       console.error('Error fetching token metadata:', error)
       return new Map()
     }
   }, [publicClient])
 
-  // Check user token balances
-  const fetchUserTokenBalances = useCallback(async (
-    tokenAddresses: string[], 
-    signal: AbortSignal
-  ): Promise<Map<string, bigint>> => {
-    if (!publicClient || !userAddress) {
-      return new Map()
-    }
-
-    const batchSize = 30
-    const balanceMap = new Map<string, bigint>()
-    
-    for (let i = 0; i < tokenAddresses.length; i += batchSize) {
-      if (signal.aborted) throw new Error('Aborted')
-      
-      const batch = tokenAddresses.slice(i, i + batchSize)
-      
-      // Parallel balance checks within batch with retry logic
-      const balancePromises = batch.map(async (tokenAddress) => {
-        let retries = 3
-        let lastError: any
-        
-        while (retries > 0) {
-          try {
-            const balance = await publicClient.readContract({
-              address: tokenAddress as `0x${string}`,
-              abi: ERC20_ABI,
-              functionName: 'balanceOf',
-              args: [userAddress as `0x${string}`],
-            })
-            
-            const balanceBigInt = balance as bigint
-            
-            if (balanceBigInt > BigInt(0)) {
-              return { address: tokenAddress, balance: balanceBigInt }
-            } else {
-              return { address: tokenAddress, balance: BigInt(0) }
-            }
-          } catch (error) {
-            lastError = error
-            retries--
-            
-            if (retries > 0) {
-              // Wait before retry with exponential backoff
-              await new Promise(resolve => setTimeout(resolve, 1000 * (3 - retries)))
-            }
-          }
-        }
-        
-        // All retries failed - skip this token
-        console.warn(`Failed to get balance for ${tokenAddress} after 3 retries:`, lastError)
-        return { address: tokenAddress, balance: BigInt(0) }
-      })
-
-      const results = await Promise.allSettled(balancePromises)
-      
-      results.forEach((result) => {
-        if (result.status === 'fulfilled' && result.value.balance > BigInt(0)) {
-          balanceMap.set(result.value.address, result.value.balance)
-        }
-      })
-      
-      // Minimal delay for RPC health
-      if (i + batchSize < tokenAddresses.length) {
-        await new Promise(resolve => setTimeout(resolve, 50))
-      }
-    }
-    
-    return balanceMap
-  }, [publicClient, userAddress])
-
-
-
-  // Validate tokens
-  const validateTokens = useCallback((tokensWithBalances: TokenInfo[]): TokenInfo[] => {
-    const validTokens = tokensWithBalances.filter(token => {
-      return (
-        token.address && 
-        token.address.length === 42 && 
-        token.address.startsWith('0x') &&
-        token.symbol &&
-        token.symbol.length > 0
-      )
-    })
-    
-    return validTokens
-  }, [])
-
-  // Fetch token prices
-  const fetchLiveTokenPrices = useCallback(async (
+  // Batch fetch USD prices from APIs
+  const fetchTokenPrices = useCallback(async (
     addresses: string[], 
     signal: AbortSignal
   ): Promise<Map<string, number>> => {
-    if (addresses.length === 0) return new Map()
-    
+    if (addresses.length === 0) {
+      return new Map()
+    }
+
     try {
-      const response = await fetch('/api/tokens/prices', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ addresses }),
-        signal
-      })
+      console.log(`💰 Fetching prices for ${addresses.length} tokens...`)
       
-      if (!response.ok) {
-        throw new Error(`Price API failed: ${response.status}`)
-      }
-      
-      const data = await response.json()
       const priceMap = new Map<string, number>()
       
-      data.prices?.forEach((price: any) => {
-        if (price.address && price.price) {
-          priceMap.set(price.address.toLowerCase(), price.price)
+      // Batch addresses for API calls
+      const batchSize = 20
+      for (let i = 0; i < addresses.length; i += batchSize) {
+        if (signal.aborted) throw new Error('Aborted')
+        
+        const batch = addresses.slice(i, i + batchSize)
+        
+        try {
+          // Try DexScreener first (Base DEX prices)
+          const dexScreenerResponse = await fetch(
+            `https://api.dexscreener.com/latest/dex/tokens/${batch.join(',')}`,
+            { signal }
+          )
+          
+          if (dexScreenerResponse.ok) {
+            const data = await dexScreenerResponse.json()
+            
+            if (data.pairs) {
+              data.pairs.forEach((pair: any) => {
+                if (pair.baseToken?.address && pair.priceUsd) {
+                  const address = pair.baseToken.address.toLowerCase()
+                  const price = parseFloat(pair.priceUsd)
+                  
+                  if (price > 0) {
+                    priceMap.set(address, price)
+                  }
+                }
+              })
+            }
+          }
+          
+          // Fallback to CoinGecko for tokens not found on DexScreener
+          const missingTokens = batch.filter(addr => !priceMap.has(addr))
+          
+          if (missingTokens.length > 0) {
+            try {
+              const coingeckoResponse = await fetch(
+                `https://api.coingecko.com/api/v3/simple/token_price/base?contract_addresses=${missingTokens.join(',')}&vs_currencies=usd`,
+                { signal }
+              )
+              
+              if (coingeckoResponse.ok) {
+                const data = await coingeckoResponse.json()
+                
+                Object.entries(data).forEach(([address, priceData]: [string, any]) => {
+                  if (priceData.usd) {
+                    priceMap.set(address.toLowerCase(), priceData.usd)
+                  }
+                })
+              }
+            } catch (error) {
+              console.warn('⚠️ CoinGecko fallback failed:', error)
+            }
+          }
+          
+        } catch (error) {
+          console.warn(`⚠️ Price fetch failed for batch ${i}-${i + batchSize}:`, error)
         }
-      })
-      
-      return priceMap
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw error
       }
-      console.error('Error fetching prices:', error)
+
+      console.log(`✅ Fetched prices for ${priceMap.size} tokens`)
+      return priceMap
+      
+    } catch (error) {
+      console.error('Error fetching token prices:', error)
       return new Map()
     }
   }, [])
 
-  // Main detection function - NEW APPROACH: Wallet-first, then API validation
-  const detectAllTokens = useCallback(async (forceRefresh = false) => {
+  // Main token detection function
+  const detectTokens = useCallback(async (forceRefresh = false) => {
     if (!isConnected || !userAddress) {
       setTokens([])
+      setSelectedTokens({})
       return
     }
 
-    // Check for cached data (unless forcing refresh)
+    // Check cache unless forcing refresh
     if (!forceRefresh) {
       const cachedTokens = getCachedTokens()
       if (cachedTokens) {
@@ -431,43 +353,42 @@ export function useComprehensiveTokenDetection() {
       }
     }
 
-    // Abort any existing operation
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
-    }
-    
-    abortControllerRef.current = new AbortController()
-    const signal = abortControllerRef.current.signal
-
     setIsLoading(true)
     setError(null)
 
+    // Cancel previous request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+    abortControllerRef.current = new AbortController()
+    const signal = abortControllerRef.current.signal
+
     try {
-      console.log('🔍 Starting direct wallet scanning...')
+      console.log('🚀 Starting comprehensive token detection...')
       
-      // Step 1: Scan wallet for ALL tokens
-      console.log('📱 Scanning wallet for tokens...')
-      const allWalletTokens = await fetchAllWalletTokens(signal)
-      console.log(`💼 Found ${allWalletTokens.length} tokens in wallet`)
+      // Step 1: Scan wallet for tokens
+      const walletTokens = await scanWalletTokens(signal)
       
-      if (allWalletTokens.length === 0) {
+      if (walletTokens.length === 0) {
         setTokens([])
         setIsLoading(false)
         return
       }
-      
-      // Step 2: Get token metadata (symbol, name, decimals) for wallet tokens
-      console.log('📋 Fetching token metadata...')
-      const tokenMetadata = await fetchTokenMetadata(allWalletTokens.map(t => t.address), signal)
-      
-      // Step 3: Build complete token list with metadata
-      const tokensWithMetadata = allWalletTokens.map(walletToken => {
+
+      // Step 2: Get token metadata
+      const tokenMetadata = await fetchTokenMetadata(
+        walletTokens.map(t => t.address), 
+        signal
+      )
+
+      // Step 3: Build token list with metadata
+      const tokensWithMetadata = walletTokens.map(walletToken => {
         const metadata = tokenMetadata.get(walletToken.address.toLowerCase()) || {
           symbol: 'UNKNOWN',
           name: 'Unknown Token',
           decimals: 18
         }
-        
+
         return {
           address: walletToken.address,
           symbol: metadata.symbol,
@@ -475,97 +396,133 @@ export function useComprehensiveTokenDetection() {
           decimals: metadata.decimals,
           balance: walletToken.balance,
           balanceFormatted: formatUnits(walletToken.balance, metadata.decimals),
-          price: 0, // Will be fetched in next step
-          valueUSD: 0, // Will be calculated in next step
-          source: 'direct-wallet-scan'
+          priceUSD: 0,
+          valueUSD: 0,
+          isEligible: false,
+          error: undefined
         }
       })
-      
-      console.log(`📊 Built ${tokensWithMetadata.length} tokens with metadata`)
-      
-      // Step 4: Fetch real prices for wallet tokens from APIs
-      console.log('💰 Fetching real prices for wallet tokens...')
-      const priceAddresses = tokensWithMetadata.map(token => token.address)
-      const priceMap = await fetchLiveTokenPrices(priceAddresses, signal)
-      
-      // Step 5: Calculate USD values and filter by requirements
-      const finalTokens: TokenBalance[] = tokensWithMetadata.map(token => {
+
+      // Step 4: Fetch prices
+      const priceMap = await fetchTokenPrices(
+        tokensWithMetadata.map(t => t.address), 
+        signal
+      )
+
+      // Step 5: Calculate USD values and filter
+      const finalTokens: TokenInfo[] = tokensWithMetadata.map(token => {
         const price = priceMap.get(token.address.toLowerCase()) || 0
         const valueUSD = price * parseFloat(token.balanceFormatted)
-        
+        const isEligible = valueUSD >= 0.1 && valueUSD <= 5.0
+
         return {
-          address: token.address,
-          symbol: token.symbol,
-          name: token.name,
-          decimals: token.decimals,
-          balance: token.balance,
-          balanceFormatted: token.balanceFormatted,
-          price,
+          ...token,
+          priceUSD: price,
           valueUSD,
-          source: token.source
+          isEligible,
+          error: price === 0 ? 'No price data available' : undefined
         }
       })
-      
-      // Step 6: Filter to tokens between $0.10-$5.00 USD (eligible range)
-      const eligibleTokens = finalTokens.filter(token => {
-        const value = token.valueUSD || 0
-        return value >= 0.1 && value <= 5.0
-      })
-      
-      console.log(`💸 Found ${eligibleTokens.length} tokens between $0.10-$5.00 USD`)
-      
-      // Cache the results
+
+      // Filter to only eligible tokens
+      const eligibleTokens = finalTokens.filter(token => token.isEligible)
+
+      console.log(`💸 Found ${eligibleTokens.length} eligible tokens (${finalTokens.length} total)`)
+
+      // Cache results
       if (userAddress) {
         memoryCache[userAddress.toLowerCase()] = {
           tokens: eligibleTokens,
           timestamp: Date.now()
         }
       }
-      
+
       setTokens(eligibleTokens)
+      setSelectedTokens({}) // Reset selection
       
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
         return
       }
-      
       console.error('Token detection error:', error)
-      setError(error instanceof Error ? error.message : 'Failed to detect tokens')
-      setTokens([])
+      setError('Failed to detect tokens. Please try again.')
     } finally {
       setIsLoading(false)
     }
-  }, [isConnected, userAddress, getCachedTokens, fetchAllWalletTokens, fetchTokenMetadata, fetchLiveTokenPrices])
+  }, [isConnected, userAddress, getCachedTokens, scanWalletTokens, fetchTokenMetadata, fetchTokenPrices])
 
-  // Clear cache when user changes
-  useEffect(() => {
-    if (!userAddress) {
-      setTokens([])
-    }
-  }, [userAddress])
-
-  // Auto-detect when wallet connects
-  useEffect(() => {
-    if (isConnected && userAddress) {
-      detectAllTokens()
+  // Validate swap selection
+  const validateSwapSelection = useCallback(() => {
+    const selectedAddresses = Object.keys(selectedTokens).filter(addr => selectedTokens[addr])
+    const selectedTokenInfos = tokens.filter(token => selectedAddresses.includes(token.address))
+    
+    const totalValue = selectedTokenInfos.reduce((sum, token) => sum + (token.valueUSD || 0), 0)
+    const selectedCount = selectedTokenInfos.length
+    
+    let isValid = false
+    let message = ''
+    
+    if (selectedCount === 0) {
+      message = 'Please select tokens to swap'
+    } else if (totalValue < 2.0) {
+      message = `Select more tokens to reach the $2.00 minimum (current: $${totalValue.toFixed(2)})`
+    } else if (totalValue > 5.0) {
+      message = `Remove some tokens to stay under the $5.00 maximum (current: $${totalValue.toFixed(2)})`
     } else {
-      setTokens([])
+      isValid = true
+      message = `Ready to swap ${selectedCount} tokens worth $${totalValue.toFixed(2)}`
     }
-  }, [isConnected, userAddress, detectAllTokens])
+    
+    setSwapValidation({
+      isValid,
+      message,
+      totalValue,
+      selectedCount
+    })
+  }, [selectedTokens, tokens])
 
-  // Cleanup on unmount
+  // Update validation when selection changes
   useEffect(() => {
-    return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort()
-      }
-    }
+    validateSwapSelection()
+  }, [validateSwapSelection])
+
+  // Toggle token selection
+  const toggleTokenSelection = useCallback((address: string) => {
+    setSelectedTokens(prev => ({
+      ...prev,
+      [address]: !prev[address]
+    }))
   }, [])
+
+  // Select all eligible tokens
+  const selectAllTokens = useCallback(() => {
+    const newSelection: TokenSelection = {}
+    tokens.forEach(token => {
+      newSelection[token.address] = true
+    })
+    setSelectedTokens(newSelection)
+  }, [tokens])
+
+  // Deselect all tokens
+  const deselectAllTokens = useCallback(() => {
+    setSelectedTokens({})
+  }, [])
+
+  // Get selected tokens for swap
+  const getSelectedTokens = useCallback(() => {
+    return tokens.filter(token => selectedTokens[token.address])
+  }, [tokens, selectedTokens])
 
   return {
     tokens,
+    selectedTokens,
     isLoading,
     error,
-    refetch: detectAllTokens,
+    swapValidation,
+    detectTokens,
+    toggleTokenSelection,
+    selectAllTokens,
+    deselectAllTokens,
+    getSelectedTokens
   }
 }
