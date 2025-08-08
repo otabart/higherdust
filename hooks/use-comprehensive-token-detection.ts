@@ -66,9 +66,10 @@ export function useComprehensiveTokenDetection() {
   }, [userAddress])
 
   // Fetch token database from API
-  const fetchLiveTokenDatabase = useCallback(async (signal: AbortSignal): Promise<TokenInfo[]> => {
+  const fetchLiveTokenDatabase = useCallback(async (signal: AbortSignal, forceRefresh = false): Promise<TokenInfo[]> => {
     try {
-      const response = await fetch('/api/tokens/detect', { signal })
+      const url = forceRefresh ? '/api/tokens/detect?refresh=1' : '/api/tokens/detect'
+      const response = await fetch(url, { signal })
       if (!response.ok) {
         throw new Error(`API request failed: ${response.status}`)
       }
@@ -211,17 +212,19 @@ export function useComprehensiveTokenDetection() {
   }, [])
 
   // Main detection function
-  const detectAllTokens = useCallback(async () => {
+  const detectAllTokens = useCallback(async (forceRefresh = false) => {
     if (!isConnected || !userAddress) {
       setTokens([])
       return
     }
 
-    // Check for cached data
-    const cachedTokens = getCachedTokens()
-    if (cachedTokens) {
-      setTokens(cachedTokens)
-      return
+    // Check for cached data (unless forcing refresh)
+    if (!forceRefresh) {
+      const cachedTokens = getCachedTokens()
+      if (cachedTokens) {
+        setTokens(cachedTokens)
+        return
+      }
     }
 
     // Abort any existing operation
@@ -237,7 +240,7 @@ export function useComprehensiveTokenDetection() {
 
     try {
       // Step 1: Fetch token database (API method only - no hardcoded fallbacks)
-      const allTokens = await fetchLiveTokenDatabase(signal)
+      const allTokens = await fetchLiveTokenDatabase(signal, forceRefresh)
       
       if (allTokens.length === 0) {
         setTokens([])

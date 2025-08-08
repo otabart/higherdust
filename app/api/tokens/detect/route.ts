@@ -98,6 +98,22 @@ const fetchLiveDynamicTokens = async (): Promise<TokenInfo[]> => {
       'RED', 'BLUE', 'GREEN', 'PINK', 'GOLD', 'SILVER', 'BLACK', 'WHITE', 'YELLOW',
       // User's specific tokens (from the image)
       'SAGE', 'LOWER', 'POV', 'CITIZEN', 'CITIZ', 'VIRTUAL', 'POINT', 'VIEW',
+      // Zora creator coins and specific deployments
+      'ZORA', 'CREATOR', 'CLANK', 'CLANKR', 'DEPLOY', 'DEPLOYMENT',
+      // Additional common patterns
+      'BULL', 'BEAR', 'DIAMOND', 'HANDS', 'GEM', 'MOON', 'SHOT', 'PUMP', 'DUMP',
+      // Gaming/entertainment
+      'GAME', 'PLAY', 'FUN', 'JOY', 'HAPPY', 'SMILE', 'LAUGH', 'DANCE',
+      // Tech/AI related
+      'AI', 'BOT', 'ROBOT', 'TECH', 'WEB3', 'DEFI', 'NFT', 'DAO',
+      // Nature/animals
+      'FROG', 'BIRD', 'FISH', 'CAT', 'DOG', 'TREE', 'FLOWER', 'EARTH', 'FIRE',
+      // Food/drinks
+      'BURGER', 'PIZZA', 'COFFEE', 'TEA', 'JUICE', 'WATER', 'BEER', 'WINE',
+      // Names/people
+      'ALEX', 'BOB', 'JOHN', 'MIKE', 'DAVE', 'TOM', 'JIM', 'SAM', 'DAN',
+      // Short/common words
+      'OK', 'YES', 'NO', 'GO', 'UP', 'DOWN', 'IN', 'OUT', 'ON', 'OFF',
       // Additional common patterns
       'COINBASE', 'CBXRP', 'EVERYONE', 'IS', 'FOR', 'BY', 'OF', 'THE', 'AND',
       // More common patterns
@@ -315,6 +331,50 @@ const fetchLiveDynamicTokens = async (): Promise<TokenInfo[]> => {
     } catch (error) {
       console.warn('⚠️ Recent tokens failed:', error)
     }
+
+    // Method 7: Specific search for Zora creator coins and deployment tokens
+    try {
+      console.log('🎨 Fetching Zora creator coins and deployment tokens...')
+      const zoraSearchTerms = ['ZORA', 'CREATOR', 'CLANK', 'CLANKR', 'DEPLOY', 'DEPLOYMENT', 'COIN']
+      
+      for (const term of zoraSearchTerms) {
+        try {
+          const zoraResponse = await fetchWithTimeout(
+            `https://api.dexscreener.com/latest/dex/search?q=${term}`,
+            {},
+            3000
+          )
+          
+          if (zoraResponse.ok) {
+            const zoraData = await zoraResponse.json()
+            
+            if (zoraData.pairs && Array.isArray(zoraData.pairs)) {
+              zoraData.pairs.forEach((pair: any) => {
+                if (pair.baseToken?.address && pair.priceUsd && pair.chainId === 'base') {
+                  const address = pair.baseToken.address.toLowerCase()
+                  
+                  if (!seenAddresses.has(address)) {
+                    seenAddresses.add(address)
+                    tokens.push({
+                      address,
+                      symbol: pair.baseToken.symbol || 'UNKNOWN',
+                      name: pair.baseToken.name || 'Unknown Token',
+                      decimals: parseInt(pair.baseToken.decimals) || 18,
+                      price: parseFloat(pair.priceUsd),
+                      source: `dexscreener-zora-${term.toLowerCase()}`
+                    })
+                  }
+                }
+              })
+            }
+          }
+        } catch (error) {
+          console.warn(`⚠️ Zora search for ${term} failed:`, error)
+        }
+      }
+    } catch (error) {
+      console.warn('⚠️ Zora creator coins search failed:', error)
+    }
     
     console.log(`✅ LIVE dynamic discovery found ${tokens.length} tokens`)
     return tokens
@@ -329,8 +389,9 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const clearCache = searchParams.get('clear')
+    const forceRefresh = searchParams.get('refresh')
     
-    if (clearCache === '1') {
+    if (clearCache === '1' || forceRefresh === '1') {
       tokenCache = null
       console.log('🗑️ Cache cleared - will fetch LIVE data')
     }

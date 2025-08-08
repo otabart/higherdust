@@ -1490,7 +1490,7 @@ function SwapDustInterface() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={detectTokens}
+                  onClick={() => detectTokens(true)}
                   disabled={isDetecting}
                   className="h-8 px-3 font-mono text-xs text-muted-foreground hover:text-foreground"
                 >
