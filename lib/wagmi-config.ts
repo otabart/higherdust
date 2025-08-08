@@ -14,19 +14,19 @@ console.log(`  WalletConnect Project ID: ${walletConnectProjectId ? 'SET' : 'MIS
 console.log(`  App Name: ${appName}`)
 console.log(`  App URL: ${appUrl}`)
 
-// RPC Configuration with paid Alchemy and fallback
+// RPC Configuration with 1rpc.io as primary (working for web app)
 const getRpcUrl = () => {
-  // Priority: Alchemy (paid) > 1rpc.io (fallback)
+  // Priority: 1rpc.io (working) > Custom RPC > PublicNode > Alchemy
   if (process.env.NEXT_PUBLIC_BASE_RPC_URL) {
     return process.env.NEXT_PUBLIC_BASE_RPC_URL
   }
   
-  if (process.env.NEXT_PUBLIC_ALCHEMY_API_KEY) {
-    return `https://base-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`
-  }
-  
-  // Fallback to 1rpc.io
+  // Use 1rpc.io as primary (working for web app)
   return 'https://1rpc.io/base'
+  
+  // Fallback options (commented out)
+  // return 'https://base-rpc.publicnode.com'
+  // return `https://base-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`
 }
 
 // Create transport with retry logic and exponential backoff

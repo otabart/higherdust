@@ -124,31 +124,55 @@ export function useComprehensiveTokenDetection() {
         })
       }
 
-      // Dynamic token detection using Transfer events
+      // Dynamic token detection using Transfer events with chunked scanning
       let tokenAddresses = new Set<string>()
       
       try {
         const currentBlock = await publicClient.getBlockNumber()
-        const fromBlock = currentBlock - BigInt(5000) // Last 5k blocks for reliability
+        const startBlock = currentBlock - BigInt(5000) // Last 5k blocks
+        const CHUNK_SIZE = 500 // 1RPC allows 500 block range
         
-        console.log('📊 Scanning Transfer events for dynamic token detection...')
+        console.log('📊 Scanning Transfer events in chunks (500 blocks each)...')
         
-        const transferLogs = await publicClient.getLogs({
-          address: userAddress as `0x${string}`,
-          event: {
-            type: 'event',
-            name: 'Transfer',
-            inputs: [
-              { type: 'address', name: 'from', indexed: true },
-              { type: 'address', name: 'to', indexed: true },
-              { type: 'uint256', name: 'value', indexed: false }
-            ]
-          },
-          fromBlock,
-          toBlock: 'latest'
-        })
-
-        transferLogs.forEach(log => {
+        let allLogs: any[] = []
+        
+        // Scan in chunks to avoid "Block range is too large" error
+        for (let fromBlock = startBlock; fromBlock < currentBlock; fromBlock += BigInt(CHUNK_SIZE)) {
+          const toBlock = fromBlock + BigInt(CHUNK_SIZE - 1) > currentBlock 
+            ? currentBlock 
+            : fromBlock + BigInt(CHUNK_SIZE - 1)
+          
+          try {
+            console.log(`   Scanning blocks ${fromBlock.toString()} to ${toBlock.toString()}`)
+            
+            const chunkLogs = await publicClient.getLogs({
+              address: userAddress as `0x${string}`,
+              event: {
+                type: 'event',
+                name: 'Transfer',
+                inputs: [
+                  { type: 'address', name: 'from', indexed: true },
+                  { type: 'address', name: 'to', indexed: true },
+                  { type: 'uint256', name: 'value', indexed: false }
+                ]
+              },
+              fromBlock,
+              toBlock
+            })
+            
+            allLogs = allLogs.concat(chunkLogs)
+            
+            // Small delay to avoid rate limits
+            await new Promise(resolve => setTimeout(resolve, 100))
+            
+          } catch (chunkError: any) {
+            console.warn(`⚠️ Chunk ${fromBlock.toString()}-${toBlock.toString()} failed:`, chunkError.message)
+            // Continue with other chunks
+          }
+        }
+        
+        // Extract unique token addresses from all logs
+        allLogs.forEach(log => {
           tokenAddresses.add(log.address.toLowerCase())
         })
         
@@ -250,8 +274,28 @@ export function useComprehensiveTokenDetection() {
       
       const metadataMap = new Map<string, {symbol: string, name: string, decimals: number}>()
       
-      // Fetch metadata for each token with retry logic
+      // Fetch metadata for each token with retry logic and null address validation
       const metadataPromises = addresses.map(async (address) => {
+        // Validate address first
+        if (!address || 
+            address === "0x0000000000000000000000000000000000000000" ||
+            address === "0x0000000000000000000000000000000000000000") {
+          console.warn(`⚠️ Skipping invalid token address: ${address}`)
+          return null
+        }
+        
+        // Validate it's a contract
+        try {
+          const code = await publicClient.getBytecode({ address: address as `0x${string}` })
+          if (!code || code === "0x") {
+            console.warn(`⚠️ Address ${address} is not a contract`)
+            return null
+          }
+        } catch (error) {
+          console.warn(`⚠️ Cannot check contract code for ${address}:`, error)
+          return null
+        }
+        
         let retries = 3
         let lastError: any
         
@@ -308,7 +352,7 @@ export function useComprehensiveTokenDetection() {
 
       const results = await Promise.allSettled(metadataPromises)
       results.forEach((result) => {
-        if (result.status === 'fulfilled') {
+        if (result.status === 'fulfilled' && result.value !== null) {
           metadataMap.set(result.value.address, result.value.metadata)
         }
       })
