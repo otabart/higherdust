@@ -89,11 +89,6 @@ const connectors = [
   // Generic injected connector (MetaMask, Rainbow browser extension, etc.)
   injected({
     shimDisconnect: true,
-    target: () => ({
-      id: 'injected',
-      name: 'Browser Wallet',
-      provider: typeof window !== 'undefined' ? window.ethereum : undefined,
-    })
   }),
   
   // Specific MetaMask connector (backup)
