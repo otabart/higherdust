@@ -1,6 +1,6 @@
 import { createConfig, http } from 'wagmi'
 import { base } from 'wagmi/chains'
-import { injected, metaMask } from 'wagmi/connectors'
+import { injected, metaMask, walletConnect, coinbaseWallet } from 'wagmi/connectors'
 import { farcasterMiniApp } from '@farcaster/miniapp-wagmi-connector'
 
 console.log('🔧 WAGMI CONFIG - Production Setup:')
@@ -62,15 +62,40 @@ const transport = createRetryTransport()
 // Create Farcaster connector (no parameters needed)
 const farcasterConnector = farcasterMiniApp()
 
-// Create connectors with Farcaster Mini App prioritized
+// Create connectors with comprehensive mobile and desktop support
 const connectors = [
   // Farcaster Mini App connector (PRIORITY - always available for auto-connect)
   farcasterConnector,
-  // Generic injected connector (fallback for non-Farcaster environments)
+  
+  // WalletConnect - Universal mobile wallet support (Rainbow, Trust, etc.)
+  walletConnect({
+    projectId: walletConnectProjectId,
+    metadata: {
+      name: appName,
+      description: 'Swap your dust tokens into HIGHER on Base',
+      url: appUrl,
+      icons: [`${appUrl}/favicon.ico`]
+    },
+    showQrModal: true,
+  }),
+  
+  // Coinbase Wallet - Popular mobile wallet
+  coinbaseWallet({
+    appName: appName,
+    appLogoUrl: `${appUrl}/favicon.ico`,
+    preference: 'all', // Support both mobile app and browser extension
+  }),
+  
+  // Generic injected connector (MetaMask, Rainbow browser extension, etc.)
   injected({
     shimDisconnect: true,
-    target: 'metaMask', // Prefer MetaMask if available
+    target: () => ({
+      id: 'injected',
+      name: 'Browser Wallet',
+      provider: typeof window !== 'undefined' ? window.ethereum : undefined,
+    })
   }),
+  
   // Specific MetaMask connector (backup)
   metaMask(),
 ]

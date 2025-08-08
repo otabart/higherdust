@@ -1,11 +1,21 @@
 import type React from "react"
-import { Inter } from "next/font/google"
+import { JetBrains_Mono, Space_Grotesk } from "next/font/google"
 import { Providers } from "@/components/providers"
 import ErrorBoundary from "@/components/error-boundary"
 import { DevelopmentErrorSuppressor } from "@/components/development-error-suppressor"
 import "./globals.css"
 
-const inter = Inter({ subsets: ["latin"], weight: ["400", "700"] })
+const jetbrainsMono = JetBrains_Mono({ 
+  subsets: ["latin"], 
+  weight: ["300", "400", "500", "600"],
+  variable: "--font-mono"
+})
+
+const spaceGrotesk = Space_Grotesk({ 
+  subsets: ["latin"], 
+  weight: ["300", "400", "500", "600", "700"],
+  variable: "--font-space"
+})
 
 export const dynamic = 'force-dynamic'
 
@@ -17,6 +27,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        {/* Mobile viewport optimization */}
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+        
         {/* Farcaster Mini App Embed Metadata - Updated for iframe compatibility */}
         <meta property="fc:miniapp" content='{"version":"1","imageUrl":"https://swapdust.vercel.app/og-image.png","button":{"title":"SWAPDUST","action":{"url":"https://swapdust.vercel.app"}},"allowsIframe":true}' />
         
@@ -45,7 +58,7 @@ export default function RootLayout({
           `
         }} />
       </head>
-      <body className={inter.className}>
+      <body className={`${spaceGrotesk.variable} ${jetbrainsMono.variable} font-space antialiased`}>
         <ErrorBoundary>
           <DevelopmentErrorSuppressor>
             <Providers>

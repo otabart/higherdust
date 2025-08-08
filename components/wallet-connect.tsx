@@ -66,9 +66,24 @@ export function WalletConnect() {
     }
   }, [connectors])
 
-  const handleConnect = async () => {
+  const handleConnect = async (preferredConnector?: any) => {
     try {
       setWalletError("")
+      
+      // If a specific connector is preferred, try that first
+      if (preferredConnector) {
+        console.log(`🎯 Attempting preferred connector: ${preferredConnector.name}`)
+        await connect({ connector: preferredConnector })
+        return
+      }
+      
+      // Auto-detect best connector based on environment
+      const isMobile = typeof window !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+      const isFarcasterEnvironment = typeof window !== 'undefined' && (
+        window.location.hostname.includes('farcaster') ||
+        window.location.hostname.includes('warpcast') ||
+        (window as any).webkit?.messageHandlers?.farcaster
+      )
       
       // Priority 1: Try Farcaster Mini App connector first (for embedded wallet)
       const farcasterConnector = connectors.find(c => c.id === 'farcasterMiniApp' || c.name.includes('Farcaster'))
@@ -82,7 +97,21 @@ export function WalletConnect() {
         }
       }
       
-      // Priority 2: Find ready connectors for fallback
+      // Priority 2: For mobile (ONLY if NOT in Farcaster environment), try WalletConnect first
+      if (isMobile && !isFarcasterEnvironment) {
+        const walletConnectConnector = connectors.find(c => c.id === 'walletConnect')
+        if (walletConnectConnector) {
+          console.log(`📱 Non-Farcaster mobile detected - trying WalletConnect: ${walletConnectConnector.name}`)
+          try {
+            await connect({ connector: walletConnectConnector })
+            return
+          } catch (wcError) {
+            console.log('ℹ️ WalletConnect failed, trying other connectors...')
+          }
+        }
+      }
+      
+      // Priority 3: Find ready connectors for fallback
       const readyConnectors = connectors.filter(connector => connector.ready)
       
       if (readyConnectors.length === 0) {
@@ -110,6 +139,8 @@ export function WalletConnect() {
       const errorMessage = error instanceof Error ? error.message : "Failed to connect wallet"
       if (errorMessage.includes('chrome.runtime.sendMessage')) {
         setWalletError("Wallet extension communication error. Please try refreshing the page or reconnecting.")
+      } else if (errorMessage.includes('User rejected')) {
+        setWalletError("Connection cancelled by user.")
       } else {
         setWalletError(errorMessage)
       }
@@ -159,21 +190,53 @@ export function WalletConnect() {
     )
   }
 
+  const isMobile = typeof window !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+  const isFarcasterEnvironment = typeof window !== 'undefined' && (
+    window.location.hostname.includes('farcaster') ||
+    window.location.hostname.includes('warpcast') ||
+    (window as any).webkit?.messageHandlers?.farcaster
+  )
+  const availableConnectors = connectors.filter(c => c.id !== 'farcasterMiniApp')
+
   return (
     <div className="flex flex-col gap-2">
       <Button 
-        onClick={handleConnect}
+        onClick={() => handleConnect()}
         disabled={isPending}
-        className="w-full"
+        className="w-full text-sm sm:text-base"
       >
-        {isPending ? "Connecting..." : "Connect Wallet"}
+        {isPending ? "Connecting..." : isFarcasterEnvironment ? "Connect Farcaster Wallet" : "Connect Wallet"}
       </Button>
+      
+      {/* Show specific wallet options on mobile ONLY if NOT in Farcaster environment */}
+      {!isFarcasterEnvironment && isMobile && availableConnectors.length > 1 && (
+        <div className="flex flex-col gap-1">
+          <p className="text-xs text-gray-500 text-center">Or choose specific wallet:</p>
+          <div className="grid grid-cols-2 gap-2">
+            {availableConnectors.slice(0, 4).map((connector, index) => (
+              <Button
+                key={index}
+                onClick={() => handleConnect(connector)}
+                disabled={isPending}
+                variant="outline"
+                size="sm"
+                className="text-xs"
+              >
+                {connector.name === 'WalletConnect' ? '📱 Mobile Wallets' : 
+                 connector.name === 'Coinbase Wallet' ? '🔵 Coinbase' :
+                 connector.name === 'MetaMask' ? '🦊 MetaMask' :
+                 connector.name}
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
       
       <Button 
         onClick={handleTestConnection}
         variant="outline"
         size="sm"
-        className="w-full"
+        className="w-full text-xs"
       >
         Test Connection
       </Button>
