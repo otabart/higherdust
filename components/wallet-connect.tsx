@@ -44,41 +44,67 @@ export function WalletConnect() {
       
       if (process.env.NODE_ENV === 'development') {
         console.log('Ready connectors:', readyConnectors.map(c => c.name))
+        console.log('User agent:', navigator.userAgent)
       }
       
-      // If no connectors are marked as ready, try detecting manually
-      if (readyConnectors.length === 0 && typeof window !== 'undefined') {
-        const { ethereum } = window as any
-        
-        if (ethereum) {
-          // Try to find an injected connector that might work
-          const injectedConnector = connectors.find(c => 
-            c.id === 'injected' || 
-            c.id === 'metaMaskSDK' || 
-            c.name === 'MetaMask' ||
-            c.name === 'Browser Wallet'
-          )
-          
-          if (injectedConnector) {
-            if (process.env.NODE_ENV === 'development') {
-              console.log('🔗 Using fallback injected connector:', injectedConnector.name)
-            }
-            await connect({ connector: injectedConnector })
-            return
-          }
-          
-          // Try WalletConnect as backup
+      // Detect mobile environment
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+      
+      // If no connectors are marked as ready, try mobile-first approach
+      if (readyConnectors.length === 0) {
+        if (isMobile) {
+          // Mobile: Prioritize WalletConnect for mobile wallets
           const wcConnector = connectors.find(c => c.id === 'walletConnect')
           if (wcConnector) {
             if (process.env.NODE_ENV === 'development') {
-              console.log('🔗 Using fallback WalletConnect connector')
+              console.log('📱 Using WalletConnect for mobile')
+            }
+            await connect({ connector: wcConnector })
+            return
+          }
+          
+          // Try Coinbase Wallet for mobile
+          const coinbaseConnector = connectors.find(c => c.id === 'coinbaseWalletSDK')
+          if (coinbaseConnector) {
+            if (process.env.NODE_ENV === 'development') {
+              console.log('📱 Using Coinbase Wallet for mobile')
+            }
+            await connect({ connector: coinbaseConnector })
+            return
+          }
+        } else {
+          // Desktop: Try injected connectors first
+          const { ethereum } = window as any
+          
+          if (ethereum) {
+            const injectedConnector = connectors.find(c => 
+              c.id === 'injected' || 
+              c.id === 'metaMaskSDK' || 
+              c.name === 'MetaMask' ||
+              c.name === 'Browser Wallet'
+            )
+            
+            if (injectedConnector) {
+              if (process.env.NODE_ENV === 'development') {
+                console.log('🖥️ Using injected connector for desktop:', injectedConnector.name)
+              }
+              await connect({ connector: injectedConnector })
+              return
+            }
+          }
+          
+          // Desktop fallback to WalletConnect
+          const wcConnector = connectors.find(c => c.id === 'walletConnect')
+          if (wcConnector) {
+            if (process.env.NODE_ENV === 'development') {
+              console.log('🖥️ Using WalletConnect fallback for desktop')
             }
             await connect({ connector: wcConnector })
             return
           }
         }
         
-        // If all else fails, try the first available connector
+        // Last resort: try any available connector
         const firstConnector = connectors[0]
         if (firstConnector) {
           if (process.env.NODE_ENV === 'development') {
@@ -88,12 +114,11 @@ export function WalletConnect() {
           return
         }
         
-        setWalletError("Wallet detected but connection failed. Please try refreshing the page.")
-        return
-      }
-
-      if (readyConnectors.length === 0) {
-        setWalletError("No wallet found. Please install MetaMask, Rainbow, or another Ethereum wallet.")
+        if (isMobile) {
+          setWalletError("To connect on mobile, please install Rainbow, MetaMask, or Coinbase Wallet app.")
+        } else {
+          setWalletError("No wallet found. Please install MetaMask browser extension or use WalletConnect.")
+        }
         return
       }
 
@@ -151,28 +176,30 @@ export function WalletConnect() {
     (window as any).webkit?.messageHandlers?.farcaster
   )
 
+  const isMobile = typeof window !== 'undefined' && 
+    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+
   return (
     <div className="text-center space-y-4">
       <div className="space-y-2">
         <p className="font-mono text-xs text-muted-foreground leading-relaxed">
           SwapDust lets you bulk swap your dusty tokens ($0.10 - $3.00) into HIGHER token
         </p>
+        {isMobile && !isFarcasterEnvironment && (
+          <p className="font-mono text-xs text-muted-foreground">
+            📱 Install Rainbow, MetaMask, or Coinbase Wallet app first
+          </p>
+        )}
       </div>
       <Button 
         onClick={() => handleConnect()}
         disabled={isPending}
         className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-mono text-sm tracking-wide rounded-none"
       >
-        {isPending ? "Connecting..." : isFarcasterEnvironment ? "Connect Farcaster Wallet" : "Connect Wallet"}
+        {isPending ? "Connecting..." : 
+         isFarcasterEnvironment ? "Connect Farcaster Wallet" : 
+         isMobile ? "Connect Mobile Wallet" : "Connect Wallet"}
       </Button>
-      
-      {process.env.NODE_ENV === 'development' && (
-        <div className="mt-2 text-center">
-          <p className="font-mono text-xs text-muted-foreground">
-            Debug: {connectors.length} connectors detected
-          </p>
-        </div>
-      )}
       
       {walletError && (
         <p className="font-mono text-xs text-destructive">

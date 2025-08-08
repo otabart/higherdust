@@ -77,6 +77,12 @@ const connectors = [
       icons: [`${appUrl}/favicon.ico`]
     },
     showQrModal: true,
+    qrModalOptions: {
+      themeMode: 'light',
+      themeVariables: {
+        '--wcm-z-index': '1000'
+      }
+    }
   }),
   
   // Coinbase Wallet - Popular mobile wallet
