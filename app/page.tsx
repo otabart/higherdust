@@ -1058,8 +1058,12 @@ function SwapDustInterface() {
       // COMPREHENSIVE SWAP VALIDATION
       console.log('🔍 COMPREHENSIVE SWAP VALIDATION:')
       
-      // Step 1: Validate individual token quotes
+      // Step 1: Validate individual token quotes and filter out insufficient amounts
       const individualQuotes: bigint[] = []
+      const validTokenData: typeof safeTokenData = []
+      const validTokenAmounts: typeof safeTokenAmounts = []
+      const skippedTokens: string[] = []
+      
       for (let i = 0; i < safeTokenData.length; i++) {
         const token = safeTokenData[i]
         const amount = safeTokenAmounts[i]
@@ -1076,20 +1080,47 @@ function SwapDustInterface() {
             args: [token.address as `0x${string}`, amount],
           }) as bigint
           
-          individualQuotes.push(quote)
-          console.log(`  ${token.symbol}: ${formatUnits(amount, token.decimals)} -> ${formatUnits(quote, 18)} HIGHER`)
-          
-          // Check if individual quote is 0
+          // Check if individual quote is 0 (amount too small)
           if (quote === BigInt(0)) {
-            throw new Error(`Swap amount too small for ${token.symbol}. Please increase the amount.`)
+            console.warn(`⚠️ Skipping ${token.symbol}: amount too small for swap (${formatUnits(amount, token.decimals)})`)
+            skippedTokens.push(token.symbol)
+            continue
           }
+          
+          // Token is valid - add to arrays
+          validTokenData.push(token)
+          validTokenAmounts.push(amount)
+          individualQuotes.push(quote)
+          console.log(`  ✅ ${token.symbol}: ${formatUnits(amount, token.decimals)} -> ${formatUnits(quote, 18)} HIGHER`)
+          
         } catch (error) {
           console.error(`❌ Quote validation failed for ${token.symbol}:`, error)
-          throw new Error(`Failed to validate ${token.symbol} quote: ${error instanceof Error ? error.message : 'Unknown error'}`)
+          skippedTokens.push(token.symbol)
+          continue
         }
       }
       
-      // Step 2: Get total bulk quote
+      // Show warning if some tokens were skipped
+      if (skippedTokens.length > 0) {
+        toast({
+          title: "Some tokens skipped",
+          description: `${skippedTokens.join(', ')} - amounts too small to swap`,
+          variant: "default",
+          duration: 5000,
+        })
+      }
+      
+      // Check if we have any valid tokens left
+      if (validTokenData.length === 0) {
+        throw new Error('No tokens have sufficient amounts for swapping. Please add more tokens or increase amounts.')
+      }
+      
+      console.log(`✅ Proceeding with ${validTokenData.length} valid tokens (${skippedTokens.length} skipped)`)
+      
+      // Create valid token addresses array
+      const validTokenAddresses = validTokenData.map(token => token.address)
+      
+      // Step 2: Get total bulk quote using valid tokens
       let totalQuote: bigint
       let individualQuotesArray: bigint[]
       
@@ -1101,7 +1132,7 @@ function SwapDustInterface() {
           address: CONTRACT_ADDRESSES.SPLIT_ROUTER as `0x${string}`,
           abi: SPLIT_ROUTER_ABI,
           functionName: 'getBulkSwapQuote',
-          args: [safeTokenAddresses as `0x${string}`[], safeTokenAmounts],
+          args: [validTokenAddresses as `0x${string}`[], validTokenAmounts],
         }) as [bigint, bigint[]]
         
         totalQuote = bulkQuoteResult[0]
@@ -1213,19 +1244,19 @@ function SwapDustInterface() {
       
       // Validate that we're not trying to swap HIGHER to HIGHER
       const higherTokenAddress = CONTRACT_ADDRESSES.HIGHER_TOKEN.toLowerCase()
-      const hasHigherToken = safeTokenAddresses.some((addr: string) => addr.toLowerCase() === higherTokenAddress)
+      const hasHigherToken = validTokenAddresses.some((addr: string) => addr.toLowerCase() === higherTokenAddress)
       
       if (hasHigherToken) {
         throw new Error('Cannot swap HIGHER token to HIGHER token. Please select other tokens.')
       }
       
-              // Estimate gas first to catch errors early - USE SAFE ARRAYS
+              // Estimate gas first to catch errors early - USE FILTERED ARRAYS
         try {
           const gasEstimate = await publicClient?.estimateContractGas({
             address: CONTRACT_ADDRESSES.SPLIT_ROUTER as `0x${string}`,
             abi: SPLIT_ROUTER_ABI,
             functionName: "executeBulkSwap",
-            args: [safeTokenAddresses as `0x${string}`[], safeTokenAmounts, minReceiveWei], // Use validated amounts and minReceive
+            args: [validTokenAddresses as `0x${string}`[], validTokenAmounts, minReceiveWei], // Use validated amounts and minReceive
             account: address as `0x${string}`, // Explicitly set the account
           })
         
@@ -1260,7 +1291,7 @@ function SwapDustInterface() {
             address: CONTRACT_ADDRESSES.SPLIT_ROUTER as `0x${string}`,
             abi: SPLIT_ROUTER_ABI,
             functionName: "executeBulkSwap",
-            args: [safeTokenAddresses as `0x${string}`[], safeTokenAmounts, minReceiveWei], // Use validated amounts and minReceive
+            args: [validTokenAddresses as `0x${string}`[], validTokenAmounts, minReceiveWei], // Use validated amounts and minReceive
             chainId: 8453, // Base mainnet
             account: address as `0x${string}`, // Explicitly set the account
           })

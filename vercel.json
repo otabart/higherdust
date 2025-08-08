@@ -8,7 +8,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "frame-ancestors 'self' https://farcaster.xyz https://*.farcaster.xyz https://warpcast.com https://*.warpcast.com https://*.vercel.app https://vercel.app; default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https: chrome-extension:; connect-src 'self' https: wss: chrome-extension:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'"
+          "value": "frame-ancestors 'self' https://farcaster.xyz https://*.farcaster.xyz https://warpcast.com https://*.warpcast.com https://*.vercel.app https://vercel.app; default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https: chrome-extension: https://cdn.zerion.io; connect-src 'self' https: wss: chrome-extension:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'"
         },
         {
           "key": "X-Content-Type-Options",

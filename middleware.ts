@@ -14,7 +14,7 @@ export function middleware(request: NextRequest) {
     "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' data: https://fonts.gstatic.com",
-    "img-src 'self' data: blob: https: chrome-extension:",
+    "img-src 'self' data: blob: https: chrome-extension: https://cdn.zerion.io",
     "connect-src 'self' https: wss: chrome-extension:",
     "worker-src 'self' blob:",
     "object-src 'none'",
