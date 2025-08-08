@@ -116,9 +116,77 @@ const fetchLiveDynamicTokens = async (): Promise<TokenInfo[]> => {
           
           console.log(`✅ Added ${tokens.length} unique tokens from comprehensive fetch`)
         }
+      } else {
+        console.warn('⚠️ Comprehensive fetch failed, falling back to trending tokens')
+        // Fallback to trending tokens if comprehensive fetch fails
+        const trendingResponse = await fetchWithTimeout(
+          'https://api.dexscreener.com/latest/dex/pairs/base?sort=h24Volume&order=desc&limit=500',
+          {},
+          5000
+        )
+        
+        if (trendingResponse.ok) {
+          const trendingData = await trendingResponse.json()
+          
+          if (trendingData.pairs && Array.isArray(trendingData.pairs)) {
+            trendingData.pairs.forEach((pair: any) => {
+              if (pair.baseToken?.address && pair.priceUsd) {
+                const address = pair.baseToken.address.toLowerCase()
+                
+                if (!seenAddresses.has(address)) {
+                  seenAddresses.add(address)
+                  tokens.push({
+                    address,
+                    symbol: pair.baseToken.symbol || 'UNKNOWN',
+                    name: pair.baseToken.name || 'Unknown Token',
+                    decimals: parseInt(pair.baseToken.decimals) || 18,
+                    price: parseFloat(pair.priceUsd),
+                    source: 'dexscreener-trending-fallback'
+                  })
+                }
+              }
+            })
+          }
+        }
       }
     } catch (error) {
       console.warn('⚠️ Comprehensive token fetch failed:', error)
+      
+      // Final fallback to trending tokens
+      try {
+        console.log('🔄 Using final fallback to trending tokens...')
+        const fallbackResponse = await fetchWithTimeout(
+          'https://api.dexscreener.com/latest/dex/pairs/base?sort=h24Volume&order=desc&limit=300',
+          {},
+          5000
+        )
+        
+        if (fallbackResponse.ok) {
+          const fallbackData = await fallbackResponse.json()
+          
+          if (fallbackData.pairs && Array.isArray(fallbackData.pairs)) {
+            fallbackData.pairs.forEach((pair: any) => {
+              if (pair.baseToken?.address && pair.priceUsd) {
+                const address = pair.baseToken.address.toLowerCase()
+                
+                if (!seenAddresses.has(address)) {
+                  seenAddresses.add(address)
+                  tokens.push({
+                    address,
+                    symbol: pair.baseToken.symbol || 'UNKNOWN',
+                    name: pair.baseToken.name || 'Unknown Token',
+                    decimals: parseInt(pair.baseToken.decimals) || 18,
+                    price: parseFloat(pair.priceUsd),
+                    source: 'dexscreener-final-fallback'
+                  })
+                }
+              }
+            })
+          }
+        }
+      } catch (fallbackError) {
+        console.error('❌ All token fetch methods failed:', fallbackError)
+      }
     }
 
     // Method 3: Get LIVE new token listings

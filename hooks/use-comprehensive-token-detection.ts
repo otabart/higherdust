@@ -65,25 +65,159 @@ export function useComprehensiveTokenDetection() {
     return null
   }, [userAddress])
 
-  // Fetch token database from API
-  const fetchLiveTokenDatabase = useCallback(async (signal: AbortSignal, forceRefresh = false): Promise<TokenInfo[]> => {
+  // Fetch ALL tokens from user's wallet (no filtering)
+  const fetchAllWalletTokens = useCallback(async (signal: AbortSignal): Promise<{address: string, balance: bigint}[]> => {
+    if (!publicClient || !userAddress) {
+      return []
+    }
+
     try {
-      const url = forceRefresh ? '/api/tokens/detect?refresh=1' : '/api/tokens/detect'
-      const response = await fetch(url, { signal })
-      if (!response.ok) {
-        throw new Error(`API request failed: ${response.status}`)
+      console.log('🔍 Scanning wallet for ALL tokens...')
+      
+      // Get token balances in batches
+      const batchSize = 50
+      const allTokens: {address: string, balance: bigint}[] = []
+      
+      // Get comprehensive list of Base tokens from API
+      const baseTokensResponse = await fetch('https://api.dexscreener.com/latest/dex/pairs/base?limit=1000', { signal })
+      let knownBaseTokens: string[] = []
+      
+      if (baseTokensResponse.ok) {
+        const baseTokensData = await baseTokensResponse.json()
+        if (baseTokensData.pairs && Array.isArray(baseTokensData.pairs)) {
+          knownBaseTokens = baseTokensData.pairs
+            .map((pair: any) => pair.baseToken?.address)
+            .filter((address: string) => address && address !== '0x0000000000000000000000000000000000000000')
+            .slice(0, 500) // Limit to top 500 tokens for performance
+        }
       }
       
-      const data = await response.json()
-      return data.tokens || []
+      // Add major tokens
+      knownBaseTokens = [
+        '0x0000000000000000000000000000000000000000', // ETH
+        '0x4200000000000000000000000000000000000006', // WETH
+        '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // USDC
+        '0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb', // DAI
+        ...knownBaseTokens
+      ]
+      
+      for (let i = 0; i < knownBaseTokens.length; i += batchSize) {
+        if (signal.aborted) throw new Error('Aborted')
+        
+        const batch = knownBaseTokens.slice(i, i + batchSize)
+        const balancePromises = batch.map(async (address) => {
+          try {
+            const balance = await publicClient.readContract({
+              address: address as `0x${string}`,
+              abi: ERC20_ABI,
+              functionName: 'balanceOf',
+              args: [userAddress as `0x${string}`]
+            })
+            
+            return { address, balance: balance as bigint }
+          } catch (error) {
+            // Token might not exist or have issues
+            return null
+          }
+        })
+        
+        const batchResults = await Promise.allSettled(balancePromises)
+        batchResults.forEach((result) => {
+          if (result.status === 'fulfilled' && result.value && result.value.balance > BigInt(0)) {
+            allTokens.push(result.value)
+          }
+        })
+      }
+      
+      console.log(`💼 Found ${allTokens.length} tokens with balances > 0`)
+      return allTokens
+      
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
         throw error
       }
-      console.error('Error fetching token database:', error)
-      throw error
+      console.error('Error fetching wallet tokens:', error)
+      return []
     }
-  }, [])
+  }, [publicClient, userAddress])
+
+  // Fetch token metadata (symbol, name, decimals) for given addresses
+  const fetchTokenMetadata = useCallback(async (addresses: string[], signal: AbortSignal): Promise<Map<string, {symbol: string, name: string, decimals: number}>> => {
+    if (!publicClient) {
+      return new Map()
+    }
+
+    try {
+      console.log(`📋 Fetching metadata for ${addresses.length} tokens...`)
+      
+      const metadataMap = new Map<string, {symbol: string, name: string, decimals: number}>()
+      
+      // ERC20 metadata ABI
+      const metadataABI = [
+        { name: 'symbol', type: 'function', inputs: [], outputs: [{ type: 'string' }], stateMutability: 'view' },
+        { name: 'name', type: 'function', inputs: [], outputs: [{ type: 'string' }], stateMutability: 'view' },
+        { name: 'decimals', type: 'function', inputs: [], outputs: [{ type: 'uint8' }], stateMutability: 'view' }
+      ] as const
+      
+      const metadataPromises = addresses.map(async (address) => {
+        try {
+          const [symbol, name, decimals] = await Promise.all([
+            publicClient.readContract({
+              address: address as `0x${string}`,
+              abi: metadataABI,
+              functionName: 'symbol'
+            }),
+            publicClient.readContract({
+              address: address as `0x${string}`,
+              abi: metadataABI,
+              functionName: 'name'
+            }),
+            publicClient.readContract({
+              address: address as `0x${string}`,
+              abi: metadataABI,
+              functionName: 'decimals'
+            })
+          ])
+          
+          return {
+            address: address.toLowerCase(),
+            metadata: {
+              symbol: symbol as string,
+              name: name as string,
+              decimals: decimals as number
+            }
+          }
+        } catch (error) {
+          // Token might not support metadata or have issues
+          return {
+            address: address.toLowerCase(),
+            metadata: {
+              symbol: 'UNKNOWN',
+              name: 'Unknown Token',
+              decimals: 18
+            }
+          }
+        }
+      })
+      
+      const results = await Promise.allSettled(metadataPromises)
+      results.forEach((result) => {
+        if (result.status === 'fulfilled') {
+          metadataMap.set(result.value.address, result.value.metadata)
+        }
+      })
+      
+      console.log(`✅ Fetched metadata for ${metadataMap.size} tokens`)
+      return metadataMap
+      
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        throw error
+      }
+      console.error('Error fetching token metadata:', error)
+      return new Map()
+    }
+  }, [publicClient])
 
   // Check user token balances
   const fetchUserTokenBalances = useCallback(async (
@@ -211,7 +345,7 @@ export function useComprehensiveTokenDetection() {
     }
   }, [])
 
-  // Main detection function
+  // Main detection function - NEW APPROACH: Wallet-first, then API validation
   const detectAllTokens = useCallback(async (forceRefresh = false) => {
     if (!isConnected || !userAddress) {
       setTokens([])
@@ -239,63 +373,70 @@ export function useComprehensiveTokenDetection() {
     setError(null)
 
     try {
-      // Step 1: Fetch token database (API method only - no hardcoded fallbacks)
-      const allTokens = await fetchLiveTokenDatabase(signal, forceRefresh)
+      console.log('🔍 Starting wallet-first token detection...')
       
-      if (allTokens.length === 0) {
+      // Step 1: Get ALL tokens from user's wallet (no filtering yet)
+      console.log('📱 Fetching ALL tokens from wallet...')
+      const allWalletTokens = await fetchAllWalletTokens(signal)
+      console.log(`💼 Found ${allWalletTokens.length} tokens in wallet`)
+      
+      if (allWalletTokens.length === 0) {
         setTokens([])
         setIsLoading(false)
         return
       }
       
-      console.log(`📊 Found ${allTokens.length} tokens from API database`)
+      // Step 2: Get token metadata (symbol, name, decimals) for wallet tokens
+      console.log('📋 Fetching token metadata...')
+      const tokenMetadata = await fetchTokenMetadata(allWalletTokens.map(t => t.address), signal)
       
-      // Step 4: Check balances for all tokens
-      const tokenAddresses = allTokens.map(token => token.address)
-      const balanceMap = await fetchUserTokenBalances(tokenAddresses, signal)
+      // Step 3: Build complete token list with metadata
+      const tokensWithMetadata = allWalletTokens.map(walletToken => {
+        const metadata = tokenMetadata.get(walletToken.address.toLowerCase()) || {
+          symbol: 'UNKNOWN',
+          name: 'Unknown Token',
+          decimals: 18
+        }
+        
+        return {
+          address: walletToken.address,
+          symbol: metadata.symbol,
+          name: metadata.name,
+          decimals: metadata.decimals,
+          balance: walletToken.balance,
+          balanceFormatted: formatUnits(walletToken.balance, metadata.decimals),
+          price: 0, // Will be fetched in next step
+          valueUSD: 0, // Will be calculated in next step
+          source: 'wallet-first'
+        }
+      })
       
-      // Step 5: Filter to tokens with balances
-      const tokensWithBalances = allTokens.filter(token => 
-        balanceMap.has(token.address.toLowerCase())
-      )
+      console.log(`📊 Built ${tokensWithMetadata.length} tokens with metadata`)
       
-      console.log(`💰 Found ${tokensWithBalances.length} tokens with balances`)
-      
-      if (tokensWithBalances.length === 0) {
-        setTokens([])
-        setIsLoading(false)
-        return
-      }
-      
-      // Step 6: Validate tokens
-      const validTokens = validateTokens(tokensWithBalances)
-      
-      // Step 7: Fetch prices
-      const priceAddresses = validTokens.map(token => token.address)
+      // Step 4: Fetch real prices for wallet tokens from APIs
+      console.log('💰 Fetching real prices for wallet tokens...')
+      const priceAddresses = tokensWithMetadata.map(token => token.address)
       const priceMap = await fetchLiveTokenPrices(priceAddresses, signal)
       
-      // Step 8: Build final token list
-      const finalTokens: TokenBalance[] = validTokens.map(token => {
-        const balance = balanceMap.get(token.address.toLowerCase()) || BigInt(0)
-        const price = priceMap.get(token.address.toLowerCase()) || token.price || 0
-        
-        const balanceFormatted = formatUnits(balance, token.decimals)
-        const valueUSD = price * parseFloat(balanceFormatted)
+      // Step 5: Calculate USD values and filter by requirements
+      const finalTokens: TokenBalance[] = tokensWithMetadata.map(token => {
+        const price = priceMap.get(token.address.toLowerCase()) || 0
+        const valueUSD = price * parseFloat(token.balanceFormatted)
         
         return {
           address: token.address,
           symbol: token.symbol,
           name: token.name,
           decimals: token.decimals,
-          balance,
-          balanceFormatted,
+          balance: token.balance,
+          balanceFormatted: token.balanceFormatted,
           price,
           valueUSD,
           source: token.source
         }
       })
       
-      // Step 9: Filter to tokens between $0.10-$5.00 USD (eligible range)
+      // Step 6: Filter to tokens between $0.10-$5.00 USD (eligible range)
       const eligibleTokens = finalTokens.filter(token => {
         const value = token.valueUSD || 0
         return value >= 0.1 && value <= 5.0
