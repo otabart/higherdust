@@ -982,9 +982,17 @@ function SwapDustInterface() {
           }
           
           // SAFE: Check for reasonable token amounts (prevent dust attacks)
-          const minSafeAmount = BigInt(1000) // Minimum 1000 wei
+          // Dynamic minimum based on token decimals - targets ~$0.05 minimum
+          const getMinimumAmount = (decimals: number): bigint => {
+            if (decimals >= 18) return BigInt('100000000000000') // 0.0001 tokens
+            if (decimals >= 12) return BigInt('100000000') // 0.1 tokens  
+            if (decimals >= 6) return BigInt('100000') // 0.1 tokens
+            return BigInt('100') // 1 token
+          }
+          
+          const minSafeAmount = getMinimumAmount(tokens[i]?.decimals || 18)
           if (amount < minSafeAmount) {
-            console.warn(`⚠️ Token ${i} amount very small: ${amount} wei`)
+            console.warn(`⚠️ Token ${i} amount very small: ${formatUnits(amount, tokens[i]?.decimals || 18)} (min: ${formatUnits(minSafeAmount, tokens[i]?.decimals || 18)})`)
           }
           
           console.log(`  Token ${i}: ${tokens[i]?.symbol} = ${amount} wei ✅`)
@@ -1082,8 +1090,22 @@ function SwapDustInterface() {
           
           // Check if individual quote is 0 (amount too small)
           if (quote === BigInt(0)) {
-            console.warn(`⚠️ Skipping ${token.symbol}: amount too small for swap (${formatUnits(amount, token.decimals)})`)
-            skippedTokens.push(token.symbol)
+            // Calculate minimum required amount for better user feedback
+            const getMinimumAmount = (decimals: number): bigint => {
+              if (decimals >= 18) return BigInt('100000000000000') // 0.0001 tokens
+              if (decimals >= 12) return BigInt('100000000') // 0.1 tokens  
+              if (decimals >= 6) return BigInt('100000') // 0.1 tokens
+              return BigInt('100') // 1 token
+            }
+            
+            const minRequired = getMinimumAmount(token.decimals)
+            const currentAmount = formatUnits(amount, token.decimals)
+            const minRequiredFormatted = formatUnits(minRequired, token.decimals)
+            
+            if (process.env.NODE_ENV === 'development') {
+              console.warn(`⚠️ Skipping ${token.symbol}: ${currentAmount} < ${minRequiredFormatted} (minimum)`)
+            }
+            skippedTokens.push(`${token.symbol} (need ≥${minRequiredFormatted})`)
             continue
           }
           
@@ -1100,15 +1122,15 @@ function SwapDustInterface() {
         }
       }
       
-      // Show warning if some tokens were skipped
-      if (skippedTokens.length > 0) {
-        toast({
-          title: "Some tokens skipped",
-          description: `${skippedTokens.join(', ')} - amounts too small to swap`,
-          variant: "default",
-          duration: 5000,
-        })
-      }
+                  // Show warning if some tokens were skipped
+            if (skippedTokens.length > 0) {
+              toast({
+                title: "Some tokens skipped",
+                description: `${skippedTokens.join(', ')} - amounts too small to swap`,
+                variant: "default",
+                duration: 8000,
+              })
+            }
       
       // Check if we have any valid tokens left
       if (validTokenData.length === 0) {

@@ -2,6 +2,7 @@
 pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
@@ -203,8 +204,10 @@ contract SplitRouter is Ownable, ReentrancyGuard {
         uint256 amountIn,
         uint256 minReceive
     ) internal returns (uint256 amountOut) {
-        // Validate minimum amount
-        if (amountIn < 1000) revert AmountTooSmall(amountIn);
+        // Validate minimum amount based on token decimals
+        uint8 decimals = IERC20Metadata(tokenIn).decimals();
+        uint256 minAmount = _getMinimumAmount(decimals);
+        if (amountIn < minAmount) revert AmountTooSmall(amountIn);
         
         // Approve router to spend tokens
         IERC20(tokenIn).approve(UNISWAP_ROUTER, amountIn);
@@ -472,6 +475,32 @@ contract SplitRouter is Ownable, ReentrancyGuard {
         }
         
         return (totalAmountOut, individualQuotes);
+    }
+
+    /**
+     * @dev Get minimum amount required for swap based on token decimals
+     * Ensures swaps are economically viable and gas-efficient
+     */
+    function _getMinimumAmount(uint8 decimals) internal pure returns (uint256) {
+        // Minimum amounts based on token decimals for economical swaps
+        // Targets ~$0.05 minimum value for most common tokens
+        if (decimals >= 18) {
+            return 100000000000000; // 0.0001 tokens (18 decimals)
+        } else if (decimals >= 12) {
+            return 100000000; // 0.1 tokens (12+ decimals)
+        } else if (decimals >= 6) {
+            return 100000; // 0.1 tokens (6+ decimals)
+        } else {
+            return 100; // 1 token (low decimal tokens)
+        }
+    }
+
+    /**
+     * @dev Get minimum amount required for swap (external view)
+     */
+    function getMinimumAmount(address tokenIn) external view returns (uint256) {
+        uint8 decimals = IERC20Metadata(tokenIn).decimals();
+        return _getMinimumAmount(decimals);
     }
 
     /**
