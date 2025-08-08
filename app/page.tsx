@@ -96,11 +96,21 @@ function SwapDustInterface() {
   const [isApproving, setIsApproving] = useState(false)
 
 
-  // Initialize Farcaster Mini App SDK
+  // Initialize Farcaster Mini App SDK and auto-connect wallet
   useEffect(() => {
     const initializeFarcaster = async () => {
       try {
         console.log('🚀 Initializing Farcaster Mini App SDK...')
+        
+        // Check if we're in a Farcaster environment
+        const isFarcasterEnvironment = typeof window !== 'undefined' && (
+          window.location.hostname.includes('farcaster') ||
+          window.location.hostname.includes('warpcast') ||
+          // Check for Farcaster Mini App specific globals
+          (window as any).webkit?.messageHandlers?.farcaster
+        )
+        
+        console.log('🔍 Farcaster environment detected:', isFarcasterEnvironment)
         
         // Optional: Get Quick Auth token for user authentication
         try {
@@ -108,6 +118,12 @@ function SwapDustInterface() {
           console.log('🔐 Farcaster user authenticated:', token ? 'Yes' : 'No')
         } catch (authError) {
           console.log('ℹ️ User not authenticated with Farcaster (optional)')
+        }
+        
+        // Auto-connect if in Farcaster environment and not already connected
+        if (isFarcasterEnvironment && !isConnected) {
+          console.log('🎯 Attempting auto-connect to Farcaster wallet...')
+          // The Farcaster connector should auto-connect if user has a connected wallet
         }
         
         // Don't call ready() here - it will be called when the app is fully loaded
@@ -120,7 +136,7 @@ function SwapDustInterface() {
     }
 
     initializeFarcaster()
-  }, [])
+  }, [isConnected])
 
   // Call ready() when content is actually loaded
   useEffect(() => {

@@ -62,17 +62,17 @@ const transport = createRetryTransport()
 // Create Farcaster connector (no parameters needed)
 const farcasterConnector = farcasterMiniApp()
 
-// Create connectors with simplified setup and better error handling
+// Create connectors with Farcaster Mini App prioritized
 const connectors = [
-  // Generic injected connector (primary - works with MetaMask, Rainbow, etc.)
+  // Farcaster Mini App connector (PRIORITY - always available for auto-connect)
+  farcasterConnector,
+  // Generic injected connector (fallback for non-Farcaster environments)
   injected({
     shimDisconnect: true,
     target: 'metaMask', // Prefer MetaMask if available
   }),
   // Specific MetaMask connector (backup)
   metaMask(),
-  // Farcaster Mini App connector (only in Farcaster environment)
-  ...(typeof window !== 'undefined' && window.location.hostname.includes('farcaster') ? [farcasterConnector] : []),
 ]
 
 console.log(`🔧 Created ${connectors.length} connectors`)

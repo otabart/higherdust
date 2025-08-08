@@ -70,7 +70,19 @@ export function WalletConnect() {
     try {
       setWalletError("")
       
-      // Find ready connectors
+      // Priority 1: Try Farcaster Mini App connector first (for embedded wallet)
+      const farcasterConnector = connectors.find(c => c.id === 'farcasterMiniApp' || c.name.includes('Farcaster'))
+      if (farcasterConnector) {
+        console.log(`🎯 Attempting Farcaster Mini App connection: ${farcasterConnector.name}`)
+        try {
+          await connect({ connector: farcasterConnector })
+          return
+        } catch (farcasterError) {
+          console.log('ℹ️ Farcaster connector not available, trying other options...')
+        }
+      }
+      
+      // Priority 2: Find ready connectors for fallback
       const readyConnectors = connectors.filter(connector => connector.ready)
       
       if (readyConnectors.length === 0) {
