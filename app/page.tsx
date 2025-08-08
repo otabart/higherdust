@@ -110,12 +110,16 @@ function SwapDustInterface() {
           (window as any).webkit?.messageHandlers?.farcaster
         )
         
-        console.log('🔍 Farcaster environment detected:', isFarcasterEnvironment)
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🔍 Farcaster environment detected:', isFarcasterEnvironment)
+        }
         
         // Optional: Get Quick Auth token for user authentication
         try {
           const { token } = await sdk.quickAuth.getToken()
-          console.log('🔐 Farcaster user authenticated:', token ? 'Yes' : 'No')
+          if (process.env.NODE_ENV === 'development') {
+            console.log('🔐 Farcaster user authenticated:', token ? 'Yes' : 'No')
+          }
         } catch (authError) {
           console.log('ℹ️ User not authenticated with Farcaster (optional)')
         }
@@ -1324,125 +1328,56 @@ function SwapDustInterface() {
     <div className="min-h-screen bg-white">
       <div className="max-w-[750px] mx-auto p-4">
         <div className="space-y-6">
-          {/* Header */}
-          <div className="text-center py-6">
-            <h1 className="text-2xl font-bold text-black mb-2">{strings.app.title}</h1>
-            <p className="text-gray-600">{strings.app.subtitle}</p>
-            
-            {/* Security Notice */}
-            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <div className="flex items-center gap-2 text-blue-800">
-                <Shield className="w-4 h-4" />
-                <span className="text-sm font-medium">Security Notice</span>
-              </div>
-              <p className="text-xs text-blue-700 mt-1">
-                Your wallet may show security warnings during token approvals. This is normal for DeFi applications. 
-                Our smart contract is audited and only swaps tokens - it cannot access your wallet or other assets.
-              </p>
-            </div>
-          </div>
+                     {/* Header */}
+           <div className="text-center py-6">
+             <h1 className="text-2xl font-space font-light tracking-tight text-foreground">{strings.app.title}</h1>
+             <p className="font-mono text-xs uppercase tracking-wider text-muted-foreground mt-2">{strings.app.subtitle}</p>
+           </div>
           {/* Dust Tokens List */}
           <Card className="border border-gray-200 rounded-sm p-6">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="font-bold text-black">Dust Tokens (under $3)</h2>
+              <div>
+                <h2 className="font-mono text-sm uppercase tracking-wider text-foreground">Tokens</h2>
+                <p className="font-mono text-xs text-muted-foreground mt-1">Under $3.00</p>
+              </div>
                           <div className="flex gap-2">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={verifyNetworkAndContract}
-                className="text-orange-600 hover:text-orange-700 hover:bg-gray-50 h-8 px-3"
-              >
-                🌐 Verify
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => window.open(`https://basescan.org/address/${CONTRACT_ADDRESSES.SPLIT_ROUTER}`, '_blank')}
-                className="text-blue-600 hover:text-blue-700 hover:bg-gray-50 h-8 px-3"
-              >
-                📋 Contract
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleDisconnectWallet}
-                disabled={isApproving || !isConnected}
-                className="text-red-600 hover:text-red-700 hover:bg-gray-50 h-8 px-3"
-              >
-                {isApproving ? (
-                  <>
-                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                    Disconnecting...
-                  </>
-                ) : (
-                  <>🔌 Disconnect Wallet</>
-                )}
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  const selectedToken = dustTokens.find(t => selectedTokens.includes(t.address))
-                  if (selectedToken) {
-                    debugTokenState(selectedToken.address)
-                  }
-                }}
-                className="text-purple-600 hover:text-purple-700 hover:bg-gray-50 h-8 px-3"
-              >
-                🔍 Debug
-              </Button>
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={detectTokens}
-                  disabled={isDetecting}
-                  className="text-[#00c389] hover:text-[#00a876] hover:bg-gray-50 h-8 px-3"
+                  onClick={handleDisconnectWallet}
+                  disabled={isApproving || !isConnected}
+                  className="font-mono text-xs text-muted-foreground hover:text-foreground h-8 px-3"
                 >
-                  {isDetecting ? (
-                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  {isApproving ? (
+                    <>
+                      <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                      Disconnecting...
+                    </>
                   ) : (
-                    <RefreshCw className="w-4 h-4" />
+                    "Disconnect"
                   )}
                 </Button>
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={toggleSelectAll}
-                  className="text-[#00c389] hover:text-[#00a876] hover:bg-gray-50 h-8 px-3"
+                  onClick={detectTokens}
+                  disabled={isDetecting}
+                  className="h-8 px-3 font-mono text-xs text-muted-foreground hover:text-foreground"
                 >
-                  {isAllSelected ? strings.tokens.deselectAll : strings.tokens.selectAll}
+                  {isDetecting ? <RefreshCw className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={toggleSelectAll}
+                  className="h-8 px-3 font-mono text-xs text-muted-foreground hover:text-foreground"
+                >
+                  {isAllSelected ? "Clear" : "All"}
                 </Button>
 
               </div>
             </div>
-            <div className="space-y-3">
-              {/* Security Info */}
-              <div className="p-3 bg-green-50 border border-green-200 rounded-lg mb-4">
-                <div className="flex items-start gap-2">
-                  <Shield className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-                  <div className="text-xs text-green-800">
-                    <p className="font-medium mb-1">Enhanced Security</p>
-                    <p>We use exact-amount approvals instead of unlimited approvals for better security:</p>
-                    <ul className="list-disc list-inside mt-1 space-y-0.5">
-                      <li>• Only approves the exact amount needed for your swap</li>
-                      <li>• No unlimited spending allowances</li>
-                      <li>• Reduced wallet warnings and improved security</li>
-                      <li>• Contract is audited and only swaps tokens</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Price Filter Notice */}
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg mb-4">
-                <div className="flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                  <div className="text-xs text-blue-800">
-                    <p className="font-medium mb-1">Wallet Token Filter</p>
-                    <p>Only showing tokens from your wallet with value between $0.10 and $3.00 USD. Tokens below $0.10 are hidden.</p>
-                  </div>
-                </div>
-              </div>
+                         <div className="space-y-3">
               
               {isDetecting ? (
                 <div className="flex items-center justify-center py-8">
@@ -1455,153 +1390,82 @@ function SwapDustInterface() {
                   <p className="text-sm mt-1">Try refreshing or check your wallet connection</p>
                 </div>
               ) : (
-                dustTokens.map((token, index) => (
-                  <div key={index} className="flex items-center justify-between py-2">
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="checkbox"
-                        id={`token-${index}`}
-                        checked={selectedTokens.includes(token.address)}
-                        onChange={() => toggleTokenSelection(token.address)}
-                        className="w-4 h-4 text-[#00c389] bg-white border-gray-300 rounded focus:ring-[#00c389] focus:ring-2"
-                      />
-                      <div className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center">
-                        <span className="text-xs font-medium text-gray-600">{token.symbol[0]}</span>
-                      </div>
-                      <label htmlFor={`token-${index}`} className="font-medium text-black cursor-pointer">
-                        {token.symbol}
-                      </label>
-                      <span className={`text-xs px-2 py-1 rounded ${(token.valueUSD || 0) < 3 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                        {(token.valueUSD || 0) < 3 ? 'DUST' : 'OK'}
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-medium text-black">
-                        {token.balanceFormatted ? `${parseFloat(token.balanceFormatted).toFixed(4)}` : '0.0000'}
-                      </div>
-                      <div className="text-sm text-gray-600">
-                        ${token.valueUSD ? token.valueUSD.toFixed(2) : '0.00'}
-                      </div>
-                    </div>
-                  </div>
-                ))
+                               <div className="divide-y divide-border">
+                 {dustTokens.map((token, index) => (
+                   <div key={index} className="flex items-center gap-4 py-3 hover:bg-muted/30 transition-colors">
+                     <input
+                       type="checkbox"
+                       id={`token-${index}`}
+                       checked={selectedTokens.includes(token.address)}
+                       onChange={() => toggleTokenSelection(token.address)}
+                       className="flex-shrink-0"
+                     />
+                     <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+                       <span className="font-mono text-xs text-muted-foreground">{token.symbol[0]}</span>
+                     </div>
+                     <div className="flex-1 min-w-0">
+                       <label htmlFor={`token-${index}`} className="font-mono text-sm text-foreground cursor-pointer block truncate">
+                         {token.symbol}
+                       </label>
+                     </div>
+                     <div className="text-right">
+                       <div className="font-mono text-xs text-foreground">
+                         {token.balanceFormatted ? parseFloat(token.balanceFormatted).toFixed(4) : '0.0000'}
+                       </div>
+                       <div className="font-mono text-xs text-muted-foreground">
+                         ${token.valueUSD ? token.valueUSD.toFixed(2) : '0.00'}
+                       </div>
+                     </div>
+                   </div>
+                 ))}
+               </div>
               )}
             </div>
             {selectedTokens.length > 0 && (
-              <div className="mt-4 pt-4 border-t border-gray-200">
-                <div className="text-sm text-gray-600">
-                  {strings.tokens.selected
-                    .replace("{count}", selectedTokens.length.toString())
-                    .replace("{total}", dustTokens.length.toString())}
+              <div className="border-t border-border px-6 py-4">
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-xs text-muted-foreground">
+                    {selectedTokens.length} selected
+                  </span>
+                  <span className="font-mono text-xs text-foreground">
+                    ${totalValue.toFixed(2)}
+                  </span>
                 </div>
               </div>
             )}
           </Card>
-          {/* Summary */}
-          <Card className="border border-gray-200 rounded-sm p-6 bg-gray-50">
-            <p className="text-black text-center">
-              {selectedTokens.length > 0
-                ? strings.summary.text
-                    .replace("{count}", selectedTokens.length.toString())
-                    .replace("{value}", totalValue.toFixed(2))
-                : strings.summary.noSelection}
-            </p>
-          </Card>
-          {/* Collapsible Facts */}
-          <Collapsible open={isFactsOpen} onOpenChange={setIsFactsOpen}>
-            <CollapsibleTrigger asChild>
+          {/* CTA Section */}
+          {selectedTokens.length > 0 && (
+            <div className="text-center space-y-4">
               <Button
-                variant="ghost"
-                className="w-full justify-between p-4 h-auto border border-gray-200 rounded-sm hover:bg-gray-50"
+                onClick={handleSwap}
+                disabled={isLoading || selectedTokens.length === 0}
+                className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-mono text-sm tracking-wide rounded-none"
               >
-                <span className="font-medium text-black">{strings.facts.title}</span>
-                {isFactsOpen ? (
-                  <ChevronUp className="w-6 h-6 text-gray-600" />
+                {isLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
-                  <ChevronDown className="w-6 h-6 text-gray-600" />
+                  `Convert ${selectedTokens.length} token${selectedTokens.length === 1 ? '' : 's'}`
                 )}
               </Button>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <Card className="border border-gray-200 rounded-sm p-6 mt-2">
-                <div className="space-y-4">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">{strings.facts.netAfterFees}</span>
-                    <span className="font-medium text-black">${netAfterFees.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">{strings.facts.minReceived}</span>
-                    <span className="font-medium text-black">${minReceived.toFixed(2)} HIGHER</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">{strings.facts.polShare}</span>
-                    <span className="font-medium text-black">${liquidityAmount.toFixed(2)}</span>
-                  </div>
-                </div>
-              </Card>
-            </CollapsibleContent>
-          </Collapsible>
-          {/* Approval Status */}
+              <p className="font-mono text-xs text-muted-foreground">
+                Receive ≈ ${netAfterFees.toFixed(2)} HIGHER
+              </p>
+            </div>
+          )}
+
+          {/* Status Indicator */}
           {approvalStatus && (
-            <div className="text-center p-3 bg-blue-50 border border-blue-200 rounded-sm">
-              <div className="text-sm text-blue-800">
-                {approvalStatus}
-              </div>
+            <div className="text-center py-3">
+              <p className="font-mono text-xs text-muted-foreground">{approvalStatus}</p>
             </div>
           )}
-          {/* Development Debug Buttons - Only show in development */}
-          {process.env.NODE_ENV === 'development' && selectedTokens.length > 0 && (
-            <div className="space-y-2">
-              <Button
-                onClick={async () => {
-                  console.log('🔍 Checking ALL allowances before swap...')
-                  for (const tokenAddress of selectedTokens) {
-                    const token = dustTokens.find(t => t.address === tokenAddress)
-                    if (token) {
-                      const allowance = await checkAllowance(tokenAddress, address || '')
-                      console.log(`  ${token.symbol}: allowance ${formatUnits(allowance, token.decimals)}, balance ${token.balanceFormatted}`)
-                    }
-                  }
-                }}
-                variant="outline"
-                className="w-full h-8 border-gray-200 text-gray-600 hover:bg-gray-50 text-xs"
-              >
-                🔍 Debug: Check ALL Allowances
-              </Button>
-              
-              {/* Debug Task 4: Manual Approval Button */}
-              <Button 
-                onClick={testSingleApproval} 
-                className="w-full h-12 bg-red-500 text-white font-bold rounded-sm border-0 text-sm"
-              >
-                🧪 DEBUG: Test Single Approval
-              </Button>
-              
 
-              
-
-            </div>
-          )}
-          {/* CTA Button */}
-          <Button
-            onClick={handleSwap}
-            disabled={isLoading || selectedTokens.length === 0}
-            className="w-full h-12 bg-[#00c389] hover:bg-[#00a876] text-white font-bold rounded-sm border-0 disabled:opacity-50"
-          >
-            {isLoading ? (
-              <div className="flex items-center gap-2">
-                <Loader2 className="w-5 h-5 animate-spin" />
-                {strings.button.loading}
-              </div>
-            ) : selectedTokens.length === 0 ? (
-              strings.button.selectTokens
-            ) : (
-              strings.button.swap
-            )}
-          </Button>
-          {/* Connected wallet info */}
-          <div className="text-center text-sm text-gray-600">
-            Connected: {address?.slice(0, 6)}...{address?.slice(-4)}
+          {/* Footer */}
+          <div className="text-center pt-8">
+            <p className="font-mono text-xs text-muted-foreground tracking-wider">
+              BASE · SWAPDUST
+            </p>
           </div>
         </div>
       </div>
