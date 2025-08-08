@@ -2,13 +2,49 @@
 
 import { useConnect, useAccount, useDisconnect } from "wagmi"
 import { Button } from "@/components/ui/button"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 
 export function WalletConnect() {
   const { connect, connectors, isPending } = useConnect()
   const { isConnected, address } = useAccount()
   const { disconnect } = useDisconnect()
   const [walletError, setWalletError] = useState<string>("")
+
+  // Auto-connect Farcaster wallet when in Farcaster environment
+  useEffect(() => {
+    const initializeFarcasterAutoConnect = async () => {
+      const isFarcasterEnvironment = typeof window !== 'undefined' && (
+        window.location.hostname.includes('farcaster') ||
+        window.location.hostname.includes('warpcast') ||
+        (window as any).webkit?.messageHandlers?.farcaster
+      )
+
+      if (isFarcasterEnvironment && !isConnected && !isPending) {
+        const farcasterConnector = connectors.find(c => 
+          c.id === 'farcasterMiniApp' || 
+          c.id === 'farcaster' || 
+          c.name.includes('Farcaster')
+        )
+        
+        if (farcasterConnector) {
+          try {
+            if (process.env.NODE_ENV === 'development') {
+              console.log('🎯 Auto-connecting Farcaster wallet...')
+            }
+            await connect({ connector: farcasterConnector })
+          } catch (error) {
+            if (process.env.NODE_ENV === 'development') {
+              console.error("Farcaster auto-connect failed:", error)
+            }
+          }
+        }
+      }
+    }
+
+    // Delay auto-connect slightly to ensure connectors are ready
+    const timer = setTimeout(initializeFarcasterAutoConnect, 500)
+    return () => clearTimeout(timer)
+  }, [connect, connectors, isConnected, isPending])
 
   const handleConnect = async (preferredConnector?: any) => {
     try {
