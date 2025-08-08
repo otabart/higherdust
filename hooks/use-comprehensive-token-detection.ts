@@ -124,15 +124,14 @@ export function useComprehensiveTokenDetection() {
         })
       }
 
-      // Try different approaches to find tokens
+      // Dynamic token detection using Transfer events
       let tokenAddresses = new Set<string>()
       
-      // Approach 1: Try Transfer events with smaller block range
       try {
         const currentBlock = await publicClient.getBlockNumber()
-        const fromBlock = currentBlock - BigInt(5000) // Reduced to 5k blocks for better reliability
+        const fromBlock = currentBlock - BigInt(5000) // Last 5k blocks for reliability
         
-        console.log('📊 Attempting Transfer event scan...')
+        console.log('📊 Scanning Transfer events for dynamic token detection...')
         
         const transferLogs = await publicClient.getLogs({
           address: userAddress as `0x${string}`,
@@ -153,31 +152,12 @@ export function useComprehensiveTokenDetection() {
           tokenAddresses.add(log.address.toLowerCase())
         })
         
-        console.log(`📋 Found ${tokenAddresses.size} tokens from Transfer events`)
+        console.log(`📋 Found ${tokenAddresses.size} unique tokens from Transfer events`)
         
       } catch (error) {
-        console.warn('⚠️ Transfer event scan failed:', error)
-        
-        // Approach 2: Fallback to common Base tokens
-        console.log('📊 Falling back to common Base tokens...')
-        const commonBaseTokens = [
-          '0x4200000000000000000000000000000000000006', // WETH
-          '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // USDC
-          '0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb', // DAI
-          '0x0578d8a44db98b23bf096a382e016e29a5ce0ffe', // HIGHER
-          '0x4ed4e862860bed51a9570b96d89af5e1b0efefed', // DEGEN
-          '0x07d15798a67253d76cea61f0ea6f57aedc59dffb', // BASED
-          '0x1111111111166b7fe7bd91427724b487980afc69', // ZORA
-          '0x0fd122a924c4528a78a8141bddd38a0e5ba35fa5', // CREATOR
-          '0x655bcaaf531c90b85db0ecdd4693d1d562d66d96', // deployer
-          '0xeb70b50cb337ff64663cdb313169edb7a00e0b07', // didyoudeploythetoken
-        ]
-        
-        commonBaseTokens.forEach(address => {
-          tokenAddresses.add(address.toLowerCase())
-        })
-        
-        console.log(`📋 Using ${tokenAddresses.size} common Base tokens as fallback`)
+        console.error('❌ Transfer event scan failed:', error)
+        console.log('📋 No tokens found - user may not have interacted with any tokens recently')
+        return allTokens // Return only ETH if any
       }
 
       // Check balances for found tokens with retry logic
