@@ -65,14 +65,14 @@ export function useComprehensiveTokenDetection() {
     return null
   }, [userAddress])
 
-  // Scan wallet for ALL tokens (no API needed)
+  // Dynamically scan wallet for ERC-20 tokens
   const fetchAllWalletTokens = useCallback(async (signal: AbortSignal): Promise<{address: string, balance: bigint}[]> => {
     if (!publicClient || !userAddress) {
       return []
     }
 
     try {
-      console.log('🔍 Scanning wallet for ALL tokens...')
+      console.log('🔍 Dynamically scanning wallet for ERC-20 tokens...')
       
       // Get user's ETH balance
       const ethBalance = await publicClient.getBalance({ address: userAddress as `0x${string}` })
@@ -86,29 +86,71 @@ export function useComprehensiveTokenDetection() {
         })
       }
       
-      // For ERC20 tokens, we need to scan for them
-      // Since we can't get a complete list of all tokens, we'll use a comprehensive list
-      const commonBaseTokens = [
-        '0x4200000000000000000000000000000000000006', // WETH
-        '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // USDC
-        '0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb', // DAI
-        '0x0578d8a44db98b23bf096a382e016e29a5ce0ffe', // HIGHER
-        '0x4ed4e862860bed51a9570b96d89af5e1b0efefed', // DEGEN
-        '0x07d15798a67253d76cea61f0ea6f57aedc59dffb', // BASED
-        '0x1111111111166b7fe7bd91427724b487980afc69', // ZORA
-        '0x0fd122a924c4528a78a8141bddd38a0e5ba35fa5', // CREATOR
-        '0x655bcaaf531c90b85db0ecdd4693d1d562d66d96', // deployer
-        '0xeb70b50cb337ff64663cdb313169edb7a00e0b07', // didyoudeploythetoken
-        // Add more common Base tokens here
-      ]
+      // Get user's ERC-20 Transfer events to find tokens they've interacted with
+      console.log('📊 Scanning Transfer events to find ERC-20 tokens...')
       
-      // Check balances for common tokens
-      const batchSize = 20
-      for (let i = 0; i < commonBaseTokens.length; i += batchSize) {
-        if (signal.aborted) throw new Error('Aborted')
+      try {
+        // Get Transfer events where user is recipient (received tokens)
+        const receivedLogs = await publicClient.getLogs({
+          address: userAddress as `0x${string}`,
+          event: {
+            type: 'event',
+            name: 'Transfer',
+            inputs: [
+              { type: 'address', name: 'from', indexed: true },
+              { type: 'address', name: 'to', indexed: true },
+              { type: 'uint256', name: 'value', indexed: false }
+            ]
+          },
+          fromBlock: 'earliest',
+          toBlock: 'latest'
+        })
         
-        const batch = commonBaseTokens.slice(i, i + batchSize)
-        const balancePromises = batch.map(async (address) => {
+        // Get Transfer events where user is sender (sent tokens)
+        const sentLogs = await publicClient.getLogs({
+          address: userAddress as `0x${string}`,
+          event: {
+            type: 'event',
+            name: 'Transfer',
+            inputs: [
+              { type: 'address', name: 'from', indexed: true },
+              { type: 'address', name: 'to', indexed: true },
+              { type: 'uint256', name: 'value', indexed: false }
+            ]
+          },
+          fromBlock: 'earliest',
+          toBlock: 'latest'
+        })
+        
+        // Extract unique token addresses from Transfer events
+        const tokenAddresses = new Set<string>()
+        
+        // Add addresses from received transfers
+        receivedLogs.forEach(log => {
+          if (log.topics && log.topics.length >= 3) {
+            const from = '0x' + log.topics[1].slice(26)
+            const to = '0x' + log.topics[2].slice(26)
+            if (to.toLowerCase() === userAddress.toLowerCase()) {
+              tokenAddresses.add(log.address.toLowerCase())
+            }
+          }
+        })
+        
+        // Add addresses from sent transfers
+        sentLogs.forEach(log => {
+          if (log.topics && log.topics.length >= 3) {
+            const from = '0x' + log.topics[1].slice(26)
+            const to = '0x' + log.topics[2].slice(26)
+            if (from.toLowerCase() === userAddress.toLowerCase()) {
+              tokenAddresses.add(log.address.toLowerCase())
+            }
+          }
+        })
+        
+        console.log(`📋 Found ${tokenAddresses.size} unique token addresses from Transfer events`)
+        
+        // Check current balances for all found tokens
+        const balancePromises = Array.from(tokenAddresses).map(async (address) => {
           try {
             const balance = await publicClient.readContract({
               address: address as `0x${string}`,
@@ -124,12 +166,37 @@ export function useComprehensiveTokenDetection() {
           }
         })
         
-        const batchResults = await Promise.allSettled(balancePromises)
-        batchResults.forEach((result) => {
+        const balanceResults = await Promise.allSettled(balancePromises)
+        balanceResults.forEach((result) => {
           if (result.status === 'fulfilled' && result.value && result.value.balance > BigInt(0)) {
             allTokens.push(result.value)
           }
         })
+        
+      } catch (error) {
+        console.warn('⚠️ Error scanning Transfer events:', error)
+        // Fallback: check some common tokens if event scanning fails
+        const fallbackTokens = [
+          '0x4200000000000000000000000000000000000006', // WETH
+          '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // USDC
+        ]
+        
+        for (const address of fallbackTokens) {
+          try {
+            const balance = await publicClient.readContract({
+              address: address as `0x${string}`,
+              abi: ERC20_ABI,
+              functionName: 'balanceOf',
+              args: [userAddress as `0x${string}`]
+            })
+            
+            if (balance > BigInt(0)) {
+              allTokens.push({ address, balance: balance as bigint })
+            }
+          } catch (error) {
+            // Skip if token doesn't exist
+          }
+        }
       }
       
       console.log(`💼 Found ${allTokens.length} tokens with balances > 0`)
