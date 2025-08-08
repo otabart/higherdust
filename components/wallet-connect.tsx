@@ -219,7 +219,7 @@ export function WalletConnect() {
     <div className="text-center space-y-4">
       <div className="space-y-2">
         <p className="font-mono text-xs text-muted-foreground leading-relaxed">
-          SwapDust lets you bulk swap your dusty tokens ($0.10 - $3.00) into HIGHER token
+          SwapDust lets you bulk swap tokens worth $0.10-$5.00 each, with a total value of $2.00-$5.00, into HIGHER token
         </p>
         {isMobile && !isFarcasterEnvironment && (
           <p className="font-mono text-xs text-muted-foreground">

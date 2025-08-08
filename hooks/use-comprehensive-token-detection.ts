@@ -292,13 +292,13 @@ export function useComprehensiveTokenDetection() {
         }
       })
       
-      // Step 9: Filter to tokens >= $0.10 USD (new minimum for selection)
+      // Step 9: Filter to tokens between $0.10-$5.00 USD (eligible range)
       const eligibleTokens = finalTokens.filter(token => {
         const value = token.valueUSD || 0
-        return value >= 0.1
+        return value >= 0.1 && value <= 5.0
       })
       
-      console.log(`💸 Found ${eligibleTokens.length} tokens with value >= $0.10 USD`)
+      console.log(`💸 Found ${eligibleTokens.length} tokens between $0.10-$5.00 USD`)
       
       // Cache the results
       if (userAddress) {

@@ -186,17 +186,16 @@ function SwapDustInterface() {
   }
 
   const toggleSelectAll = () => {
-    // Only select tokens that don't exceed the $5.00 limit
-    const eligibleAddresses = dustTokens
-      .filter(token => (token.valueUSD || 0) <= 5.0)
-      .map((token) => token.address)
+    // Since hook filters to $0.10-$5.00, all tokens are eligible
+    const allAddresses = dustTokens.map((token) => token.address)
     
     setSelectedTokens((prev) => (
-      prev.length === eligibleAddresses.length ? [] : eligibleAddresses
+      prev.length === allAddresses.length ? [] : allAddresses
     ))
   }
 
-  const eligibleTokens = dustTokens.filter(token => (token.valueUSD || 0) <= 5.0)
+  // Since hook now filters to $0.10-$5.00, all dustTokens are eligible
+  const eligibleTokens = dustTokens
   const isAllSelected = selectedTokens.length === eligibleTokens.length && eligibleTokens.length > 0
   const isPartiallySelected = selectedTokens.length > 0 && selectedTokens.length < eligibleTokens.length
 
@@ -221,19 +220,7 @@ function SwapDustInterface() {
         return
       }
 
-      // Check for individual tokens exceeding $5.00 limit
-      const tokensExceedingLimit = selectedTokensData.filter(token => (token.valueUSD || 0) > 5.0)
-      
-      if (tokensExceedingLimit.length > 0) {
-        const tokenNames = tokensExceedingLimit.map(token => token.symbol).join(', ')
-        setSwapValidation({
-          isValid: false,
-          message: `One or more tokens exceed the $5.00 per-token limit: ${tokenNames}. Please deselect those tokens.`,
-          totalValue,
-          hasExceedsLimit: true
-        })
-        return
-      }
+      // No individual token limit check needed since hook filters to $0.10-$5.00 range
 
       // Check total value constraints
       if (totalValue < 2.0) {
@@ -1478,7 +1465,7 @@ function SwapDustInterface() {
                 <p className="font-mono text-xs text-muted-foreground mt-1">
                   {dustTokens.length > 0 && (
                     <>
-                      {eligibleTokens.length} eligible • {dustTokens.length - eligibleTokens.length} over $5.00 limit
+                      {dustTokens.length} tokens ($0.10 - $5.00)
                     </>
                   )}
                 </p>
@@ -1513,10 +1500,10 @@ function SwapDustInterface() {
                   variant="ghost"
                   size="sm"
                   onClick={toggleSelectAll}
-                  disabled={eligibleTokens.length === 0}
+                  disabled={dustTokens.length === 0}
                   className="h-8 px-3 font-mono text-xs text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {isAllSelected ? "Clear" : `All (${eligibleTokens.length})`}
+                  {isAllSelected ? "Clear" : "All"}
                 </Button>
 
               </div>
@@ -1537,49 +1524,39 @@ function SwapDustInterface() {
                                <div className="divide-y divide-border">
                  {dustTokens.map((token, index) => {
                    const tokenValue = token.valueUSD || 0
-                   const exceedsLimit = tokenValue > 5.0
                    const isSelected = selectedTokens.includes(token.address)
                    
                    return (
                      <div key={index} className={`flex items-center gap-4 py-3 transition-colors ${
-                       exceedsLimit ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-muted/30'
-                     } ${isSelected ? 'bg-green-50' : ''}`}>
+                       isSelected ? 'bg-green-50' : 'hover:bg-muted/30'
+                     }`}>
                        <input
                          type="checkbox"
                          id={`token-${index}`}
                          checked={isSelected}
                          onChange={() => toggleTokenSelection(token.address)}
-                         disabled={exceedsLimit}
                          className="flex-shrink-0"
                        />
                        <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                         exceedsLimit ? 'bg-red-200' : isSelected ? 'bg-green-200' : 'bg-muted'
+                         isSelected ? 'bg-green-200' : 'bg-muted'
                        }`}>
                          <span className={`font-mono text-xs ${
-                           exceedsLimit ? 'text-red-700' : isSelected ? 'text-green-700' : 'text-muted-foreground'
+                           isSelected ? 'text-green-700' : 'text-muted-foreground'
                          }`}>
                            {token.symbol[0]}
                          </span>
                        </div>
                        <div className="flex-1 min-w-0">
-                         <label htmlFor={`token-${index}`} className={`font-mono text-sm cursor-pointer block truncate ${
-                           exceedsLimit ? 'text-red-600 line-through' : 'text-foreground'
-                         }`}>
+                         <label htmlFor={`token-${index}`} className="font-mono text-sm cursor-pointer block truncate text-foreground">
                            {token.symbol}
                          </label>
-                         {exceedsLimit && (
-                           <p className="font-mono text-xs text-red-500">Exceeds $5.00 limit</p>
-                         )}
                        </div>
                        <div className="text-right">
                          <div className="font-mono text-xs text-foreground">
                            {token.balanceFormatted ? parseFloat(token.balanceFormatted).toFixed(4) : '0.0000'}
                          </div>
-                         <div className={`font-mono text-xs ${
-                           exceedsLimit ? 'text-red-600 font-semibold' : 'text-muted-foreground'
-                         }`}>
+                         <div className="font-mono text-xs text-muted-foreground">
                            ${tokenValue.toFixed(2)}
-                           {exceedsLimit && ' 🚫'}
                          </div>
                        </div>
                      </div>
