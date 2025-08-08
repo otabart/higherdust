@@ -1311,28 +1311,39 @@ function SwapDustInterface() {
 
   if (!isConnected) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center p-4">
-        <div className="w-full max-w-md text-center">
-          <h1 className="text-2xl font-bold text-black mb-6">{strings.app.title}</h1>
-          <WalletConnect />
-              </div>
-    </div>
-    
-
-  )
-}
+      <div className="min-h-screen bg-background flex items-center justify-center p-6">
+        <div className="w-full max-w-md text-center space-y-8">
+          <div>
+            <h1 className="text-2xl font-space font-light tracking-tight text-foreground">
+              SWAPDUST
+            </h1>
+            <p className="font-mono text-xs uppercase tracking-wider text-muted-foreground mt-2">
+              Convert → Higher
+            </p>
+          </div>
+          <div className="border border-border rounded-none p-6">
+            <WalletConnect />
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   const isLoading = isPending || isConfirming || isSwapping
 
   return (
-    <div className="min-h-screen bg-white">
-      <div className="max-w-[750px] mx-auto p-4">
-        <div className="space-y-6">
-                     {/* Header */}
-           <div className="text-center py-6">
-             <h1 className="text-2xl font-space font-light tracking-tight text-foreground">{strings.app.title}</h1>
-             <p className="font-mono text-xs uppercase tracking-wider text-muted-foreground mt-2">{strings.app.subtitle}</p>
-           </div>
+    <div className="min-h-screen bg-background">
+      <div className="max-w-[750px] mx-auto px-6 py-8">
+        <div className="space-y-8">
+          {/* Header */}
+          <div className="text-center">
+            <h1 className="text-2xl font-space font-light tracking-tight text-foreground">
+              SWAPDUST
+            </h1>
+            <p className="font-mono text-xs uppercase tracking-wider text-muted-foreground mt-2">
+              Convert → Higher
+            </p>
+          </div>
           {/* Dust Tokens List */}
           <Card className="border border-gray-200 rounded-sm p-6">
             <div className="flex justify-between items-center mb-4">
