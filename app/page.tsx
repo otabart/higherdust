@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useSwitchChain, usePublicClient } from "wagmi"
+import { useAccount, useWriteContract, useWaitForTransactionReceipt, useSwitchChain, usePublicClient, useDisconnect } from "wagmi"
 import { waitForTransactionReceipt } from "wagmi/actions"
 import { base } from "wagmi/chains"
 import { parseUnits, formatUnits } from "viem"
@@ -84,6 +84,7 @@ export default function SwapDustApp() {
 
 function SwapDustInterface() {
   const { address, isConnected, chainId } = useAccount()
+  const { disconnect } = useDisconnect()
   const publicClient = usePublicClient()
   const { tokens: dustTokens, isLoading: isDetecting, refetch: detectTokens } = useComprehensiveTokenDetection()
   const { switchChain } = useSwitchChain()
@@ -592,6 +593,75 @@ function SwapDustInterface() {
         variant: "destructive",
         duration: 3000,
       })
+    }
+  }
+
+  // Complete wallet disconnection with approval revocation
+  const handleDisconnectWallet = async () => {
+    try {
+      setIsApproving(true)
+      
+      toast({
+        title: "Disconnecting Wallet",
+        description: "Revoking all approvals and disconnecting...",
+        duration: 3000,
+      })
+
+      // Revoke approvals for all selected tokens first
+      if (selectedTokens.length > 0) {
+        console.log(`🚫 Revoking approvals for ${selectedTokens.length} tokens...`)
+        
+        for (const tokenAddress of selectedTokens) {
+          try {
+            await writeContract({
+              address: tokenAddress as `0x${string}`,
+              abi: [
+                {
+                  name: 'approve',
+                  type: 'function',
+                  inputs: [
+                    { name: 'spender', type: 'address' },
+                    { name: 'amount', type: 'uint256' }
+                  ],
+                  outputs: [{ type: 'bool' }],
+                  stateMutability: 'nonpayable'
+                }
+              ],
+              functionName: 'approve',
+              args: [CONTRACT_ADDRESSES.SPLIT_ROUTER as `0x${string}`, BigInt(0)],
+            })
+            console.log(`✅ Revoked approval for ${tokenAddress}`)
+          } catch (error) {
+            console.error(`❌ Failed to revoke approval for ${tokenAddress}:`, error)
+            // Continue with other tokens even if one fails
+          }
+        }
+      }
+
+      // Disconnect the wallet
+      disconnect()
+      
+      // Clear local state
+      setSelectedTokens([])
+      setApprovalStatus('')
+      setApprovalTxHash('')
+      
+      toast({
+        title: "Wallet Disconnected",
+        description: "All approvals revoked and wallet disconnected successfully",
+        duration: 5000,
+      })
+      
+    } catch (error) {
+      console.error('❌ Disconnect error:', error)
+      toast({
+        title: "Disconnect Failed", 
+        description: "Failed to fully disconnect wallet",
+        variant: "destructive",
+        duration: 3000,
+      })
+    } finally {
+      setIsApproving(false)
     }
   }
 
@@ -1279,15 +1349,18 @@ function SwapDustInterface() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => {
-                  const selectedToken = dustTokens.find(t => selectedTokens.includes(t.address))
-                  if (selectedToken) {
-                    revokeApproval(selectedToken.address)
-                  }
-                }}
+                onClick={handleDisconnectWallet}
+                disabled={isApproving || !isConnected}
                 className="text-red-600 hover:text-red-700 hover:bg-gray-50 h-8 px-3"
               >
-                🚫 Revoke
+                {isApproving ? (
+                  <>
+                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                    Disconnecting...
+                  </>
+                ) : (
+                  <>🔌 Disconnect Wallet</>
+                )}
               </Button>
               <Button
                 variant="ghost"

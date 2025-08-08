@@ -1,12 +1,13 @@
 "use client"
 
-import { useConnect, useAccount } from "wagmi"
+import { useConnect, useAccount, useDisconnect } from "wagmi"
 import { Button } from "@/components/ui/button"
 import { useState, useEffect } from "react"
 
 export function WalletConnect() {
   const { connect, connectors, isPending } = useConnect()
-  const { isConnected } = useAccount()
+  const { isConnected, address } = useAccount()
+  const { disconnect } = useDisconnect()
   const [walletError, setWalletError] = useState<string>("")
   const [detectedWallets, setDetectedWallets] = useState<string[]>([])
   const [connectorStatus, setConnectorStatus] = useState<any[]>([])
@@ -125,8 +126,23 @@ export function WalletConnect() {
 
   if (isConnected) {
     return (
-      <div className="flex items-center gap-4">
-        <span className="text-sm text-green-600">✅ Connected</span>
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-green-600">✅ Connected</span>
+          {address && (
+            <span className="text-xs text-gray-500 font-mono">
+              {address.slice(0, 6)}...{address.slice(-4)}
+            </span>
+          )}
+        </div>
+        <Button 
+          onClick={() => disconnect()}
+          variant="outline"
+          size="sm"
+          className="w-full text-red-600 border-red-200 hover:bg-red-50"
+        >
+          🔌 Disconnect
+        </Button>
       </div>
     )
   }
