@@ -465,7 +465,7 @@ export function useComprehensiveTokenDetection() {
     } finally {
       setIsLoading(false)
     }
-  }, [isConnected, userAddress, getCachedTokens, fetchLiveTokenDatabase, fetchUserTokenBalances, validateTokens, fetchLiveTokenPrices])
+  }, [isConnected, userAddress, getCachedTokens, fetchAllWalletTokens, fetchTokenMetadata, fetchLiveTokenPrices])
 
   // Clear cache when user changes
   useEffect(() => {
