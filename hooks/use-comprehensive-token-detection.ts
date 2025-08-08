@@ -94,7 +94,7 @@ export function useComprehensiveTokenDetection() {
     return null
   }, [userAddress])
 
-  // Efficient on-chain token scanning
+  // Robust on-chain token scanning with RPC fallbacks
   const scanWalletTokens = useCallback(async (signal: AbortSignal): Promise<{address: string, balance: bigint}[]> => {
     if (!publicClient || !userAddress) {
       return []
@@ -104,9 +104,15 @@ export function useComprehensiveTokenDetection() {
       console.log('🔍 Scanning wallet for ERC-20 tokens...')
       
       // Get user's ETH balance
-      const ethBalance = await publicClient.getBalance({ 
-        address: userAddress as `0x${string}` 
-      })
+      let ethBalance: bigint
+      try {
+        ethBalance = await publicClient.getBalance({ 
+          address: userAddress as `0x${string}` 
+        })
+      } catch (error) {
+        console.warn('⚠️ Failed to get ETH balance:', error)
+        ethBalance = BigInt(0)
+      }
       
       const allTokens: {address: string, balance: bigint}[] = []
       
@@ -118,48 +124,93 @@ export function useComprehensiveTokenDetection() {
         })
       }
 
-      // Get ERC-20 tokens from Transfer events (efficient approach)
-      const currentBlock = await publicClient.getBlockNumber()
-      const fromBlock = currentBlock - BigInt(10000) // Last 10k blocks for performance
+      // Try different approaches to find tokens
+      let tokenAddresses = new Set<string>()
       
-      const transferLogs = await publicClient.getLogs({
-        address: userAddress as `0x${string}`,
-        event: {
-          type: 'event',
-          name: 'Transfer',
-          inputs: [
-            { type: 'address', name: 'from', indexed: true },
-            { type: 'address', name: 'to', indexed: true },
-            { type: 'uint256', name: 'value', indexed: false }
-          ]
-        },
-        fromBlock,
-        toBlock: 'latest'
-      })
+      // Approach 1: Try Transfer events with smaller block range
+      try {
+        const currentBlock = await publicClient.getBlockNumber()
+        const fromBlock = currentBlock - BigInt(5000) // Reduced to 5k blocks for better reliability
+        
+        console.log('📊 Attempting Transfer event scan...')
+        
+        const transferLogs = await publicClient.getLogs({
+          address: userAddress as `0x${string}`,
+          event: {
+            type: 'event',
+            name: 'Transfer',
+            inputs: [
+              { type: 'address', name: 'from', indexed: true },
+              { type: 'address', name: 'to', indexed: true },
+              { type: 'uint256', name: 'value', indexed: false }
+            ]
+          },
+          fromBlock,
+          toBlock: 'latest'
+        })
 
-      // Extract unique token addresses
-      const tokenAddresses = new Set<string>()
-      transferLogs.forEach(log => {
-        tokenAddresses.add(log.address.toLowerCase())
-      })
+        transferLogs.forEach(log => {
+          tokenAddresses.add(log.address.toLowerCase())
+        })
+        
+        console.log(`📋 Found ${tokenAddresses.size} tokens from Transfer events`)
+        
+      } catch (error) {
+        console.warn('⚠️ Transfer event scan failed:', error)
+        
+        // Approach 2: Fallback to common Base tokens
+        console.log('📊 Falling back to common Base tokens...')
+        const commonBaseTokens = [
+          '0x4200000000000000000000000000000000000006', // WETH
+          '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // USDC
+          '0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb', // DAI
+          '0x0578d8a44db98b23bf096a382e016e29a5ce0ffe', // HIGHER
+          '0x4ed4e862860bed51a9570b96d89af5e1b0efefed', // DEGEN
+          '0x07d15798a67253d76cea61f0ea6f57aedc59dffb', // BASED
+          '0x1111111111166b7fe7bd91427724b487980afc69', // ZORA
+          '0x0fd122a924c4528a78a8141bddd38a0e5ba35fa5', // CREATOR
+          '0x655bcaaf531c90b85db0ecdd4693d1d562d66d96', // deployer
+          '0xeb70b50cb337ff64663cdb313169edb7a00e0b07', // didyoudeploythetoken
+        ]
+        
+        commonBaseTokens.forEach(address => {
+          tokenAddresses.add(address.toLowerCase())
+        })
+        
+        console.log(`📋 Using ${tokenAddresses.size} common Base tokens as fallback`)
+      }
 
-      console.log(`📋 Found ${tokenAddresses.size} unique token addresses from Transfer events`)
-
-      // Check balances for found tokens
+      // Check balances for found tokens with retry logic
+      console.log(`💼 Checking balances for ${tokenAddresses.size} tokens...`)
+      
       const balancePromises = Array.from(tokenAddresses).map(async (address) => {
-        try {
-          const balance = await publicClient.readContract({
-            address: address as `0x${string}`,
-            abi: ERC20_ABI,
-            functionName: 'balanceOf',
-            args: [userAddress as `0x${string}`]
-          })
-          
-          return { address, balance: balance as bigint }
-        } catch (error) {
-          // Token might not exist or have issues
-          return null
+        let retries = 3
+        let lastError: any
+        
+        while (retries > 0) {
+          try {
+            const balance = await publicClient.readContract({
+              address: address as `0x${string}`,
+              abi: ERC20_ABI,
+              functionName: 'balanceOf',
+              args: [userAddress as `0x${string}`]
+            })
+            
+            return { address, balance: balance as bigint }
+          } catch (error) {
+            lastError = error
+            retries--
+            
+            if (retries > 0) {
+              // Wait before retry with exponential backoff
+              await new Promise(resolve => setTimeout(resolve, 1000 * (3 - retries)))
+            }
+          }
         }
+        
+        // All retries failed - skip this token
+        console.warn(`⚠️ Failed to get balance for ${address} after 3 retries:`, lastError)
+        return null
       })
 
       const balanceResults = await Promise.allSettled(balancePromises)
@@ -195,44 +246,58 @@ export function useComprehensiveTokenDetection() {
       
       const metadataMap = new Map<string, {symbol: string, name: string, decimals: number}>()
       
-      // Fetch metadata for each token
+      // Fetch metadata for each token with retry logic
       const metadataPromises = addresses.map(async (address) => {
-        try {
-          const [symbol, name, decimals] = await Promise.all([
-            publicClient.readContract({
-              address: address as `0x${string}`,
-              abi: ERC20_ABI,
-              functionName: 'symbol'
-            }),
-            publicClient.readContract({
-              address: address as `0x${string}`,
-              abi: ERC20_ABI,
-              functionName: 'name'
-            }),
-            publicClient.readContract({
-              address: address as `0x${string}`,
-              abi: ERC20_ABI,
-              functionName: 'decimals'
-            })
-          ])
-          
-          return {
-            address: address.toLowerCase(),
-            metadata: {
-              symbol: symbol as string,
-              name: name as string,
-              decimals: decimals as number
+        let retries = 3
+        let lastError: any
+        
+        while (retries > 0) {
+          try {
+            const [symbol, name, decimals] = await Promise.all([
+              publicClient.readContract({
+                address: address as `0x${string}`,
+                abi: ERC20_ABI,
+                functionName: 'symbol'
+              }),
+              publicClient.readContract({
+                address: address as `0x${string}`,
+                abi: ERC20_ABI,
+                functionName: 'name'
+              }),
+              publicClient.readContract({
+                address: address as `0x${string}`,
+                abi: ERC20_ABI,
+                functionName: 'decimals'
+              })
+            ])
+            
+            return {
+              address: address.toLowerCase(),
+              metadata: {
+                symbol: symbol as string,
+                name: name as string,
+                decimals: decimals as number
+              }
+            }
+          } catch (error) {
+            lastError = error
+            retries--
+            
+            if (retries > 0) {
+              // Wait before retry with exponential backoff
+              await new Promise(resolve => setTimeout(resolve, 500 * (3 - retries)))
             }
           }
-        } catch (error) {
-          // Use defaults for failed metadata
-          return {
-            address: address.toLowerCase(),
-            metadata: {
-              symbol: 'UNKNOWN',
-              name: 'Unknown Token',
-              decimals: 18
-            }
+        }
+        
+        // All retries failed - use defaults
+        console.warn(`⚠️ Failed to get metadata for ${address} after 3 retries:`, lastError)
+        return {
+          address: address.toLowerCase(),
+          metadata: {
+            symbol: 'UNKNOWN',
+            name: 'Unknown Token',
+            decimals: 18
           }
         }
       })
