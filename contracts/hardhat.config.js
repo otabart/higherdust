@@ -2,17 +2,21 @@ require("@nomicfoundation/hardhat-toolbox");
 require("dotenv").config();
 
 const getBaseRPC = () => {
-    // Priority: Custom RPC > Alchemy > 1rpc.io
+    // Priority: PublicNode (working) > Custom RPC > Alchemy > 1rpc.io
     if (process.env.NEXT_PUBLIC_BASE_RPC_URL) {
         return process.env.NEXT_PUBLIC_BASE_RPC_URL;
     }
     
-    if (process.env.NEXT_PUBLIC_ALCHEMY_API_KEY) {
-        return `https://base-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`;
-    }
+    // Use PublicNode as primary (confirmed working)
+    return "https://base-rpc.publicnode.com";
+    
+    // Temporarily disabled due to balance issues:
+    // if (process.env.NEXT_PUBLIC_ALCHEMY_API_KEY) {
+    //     return `https://base-mainnet.g.alchemy.com/v2/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`;
+    // }
     
     // Fallback to 1rpc.io
-    return "https://1rpc.io/base";
+    // return "https://1rpc.io/base";
 };
 
 /** @type import('hardhat/config').HardhatUserConfig */
