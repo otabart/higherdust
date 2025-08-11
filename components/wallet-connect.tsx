@@ -13,11 +13,37 @@ export function WalletConnect() {
   // Auto-connect Farcaster wallet when in Farcaster environment
   useEffect(() => {
     const initializeFarcasterAutoConnect = async () => {
+      // Enhanced Farcaster environment detection
       const isFarcasterEnvironment = typeof window !== 'undefined' && (
+        // Check hostname
         window.location.hostname.includes('farcaster') ||
         window.location.hostname.includes('warpcast') ||
-        (window as any).webkit?.messageHandlers?.farcaster
+        // Check for Farcaster webkit handlers (iOS)
+        (window as any).webkit?.messageHandlers?.farcaster ||
+        // Check for Farcaster in user agent
+        navigator.userAgent.includes('Farcaster') ||
+        navigator.userAgent.includes('Warpcast') ||
+        // Check for Farcaster in URL parameters
+        window.location.search.includes('farcaster') ||
+        window.location.search.includes('warpcast') ||
+        // Check for Farcaster in referrer
+        document.referrer.includes('farcaster') ||
+        document.referrer.includes('warpcast') ||
+        // Check for Farcaster environment variables
+        (window as any).__FARCASTER_ENV__ ||
+        // Check for Farcaster in localStorage (if previously set)
+        localStorage.getItem('farcaster_connected') === 'true'
       )
+
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 Farcaster environment check:', {
+          hostname: window.location.hostname,
+          userAgent: navigator.userAgent,
+          referrer: document.referrer,
+          hasWebkit: !!(window as any).webkit?.messageHandlers?.farcaster,
+          isFarcasterEnv: isFarcasterEnvironment
+        })
+      }
 
       if (isFarcasterEnvironment && !isConnected && !isPending) {
         const farcasterConnector = connectors.find(c => 
@@ -30,19 +56,41 @@ export function WalletConnect() {
           try {
             if (process.env.NODE_ENV === 'development') {
               console.log('🎯 Auto-connecting Farcaster wallet...')
+              console.log('Found Farcaster connector:', farcasterConnector.name)
             }
+            
+            // Set a flag to remember Farcaster connection attempt
+            localStorage.setItem('farcaster_connected', 'true')
+            
             await connect({ connector: farcasterConnector })
+            
+            if (process.env.NODE_ENV === 'development') {
+              console.log('✅ Farcaster auto-connect successful!')
+            }
           } catch (error) {
             if (process.env.NODE_ENV === 'development') {
-              console.error("Farcaster auto-connect failed:", error)
+              console.error("❌ Farcaster auto-connect failed:", error)
             }
+            // Remove the flag if connection failed
+            localStorage.removeItem('farcaster_connected')
+          }
+        } else {
+          if (process.env.NODE_ENV === 'development') {
+            console.log('⚠️ Farcaster connector not found in available connectors')
+            console.log('Available connectors:', connectors.map(c => ({ id: c.id, name: c.name })))
           }
         }
+      } else if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 Farcaster auto-connect conditions not met:', {
+          isFarcasterEnvironment,
+          isConnected,
+          isPending
+        })
       }
     }
 
     // Delay auto-connect slightly to ensure connectors are ready
-    const timer = setTimeout(initializeFarcasterAutoConnect, 500)
+    const timer = setTimeout(initializeFarcasterAutoConnect, 1000)
     return () => clearTimeout(timer)
   }, [connect, connectors, isConnected, isPending])
 
@@ -65,14 +113,21 @@ export function WalletConnect() {
         return
       }
 
-      // Priority 1: Try Farcaster Mini App connector first
+      // Priority 1: Try Farcaster Mini App connector first (even if not marked as ready)
       const farcasterConnector = connectors.find(c => c.id === 'farcasterMiniApp' || c.name.includes('Farcaster'))
-      if (farcasterConnector && farcasterConnector.ready) {
+      if (farcasterConnector) {
         if (process.env.NODE_ENV === 'development') {
-          console.log('🎯 Using Farcaster connector')
+          console.log('🎯 Using Farcaster connector (ready state:', farcasterConnector.ready, ')')
         }
-        await connect({ connector: farcasterConnector })
-        return
+        try {
+          await connect({ connector: farcasterConnector })
+          return
+        } catch (error) {
+          if (process.env.NODE_ENV === 'development') {
+            console.log('⚠️ Farcaster connection failed, trying fallback:', error)
+          }
+          // Continue to fallback connectors
+        }
       }
 
       // Priority 2: Find ready connectors for fallback
@@ -227,20 +282,56 @@ export function WalletConnect() {
           </p>
         )}
       </div>
-      <Button 
-        onClick={() => handleConnect()}
-        disabled={isPending}
-        className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-mono text-sm tracking-wide rounded-none"
-      >
-        {isPending ? "Connecting..." : 
-         isFarcasterEnvironment ? "Connect Farcaster Wallet" : 
-         isMobile ? "Connect Mobile Wallet" : "Connect Wallet"}
-      </Button>
+      
+      {/* Farcaster Connection Button - Always visible for testing */}
+      <div className="space-y-2">
+        <Button 
+          onClick={() => {
+            const farcasterConnector = connectors.find(c => c.id === 'farcasterMiniApp' || c.name.includes('Farcaster'))
+            if (farcasterConnector) {
+              handleConnect(farcasterConnector)
+            }
+          }}
+          disabled={isPending}
+          className="w-full h-12 bg-purple-600 hover:bg-purple-700 text-white font-mono text-sm tracking-wide rounded-none"
+        >
+          {isPending ? "Connecting..." : "🎯 Connect Farcaster Wallet"}
+        </Button>
+        <p className="font-mono text-xs text-muted-foreground">
+          Connect your Farcaster wallet for instant access
+        </p>
+      </div>
+      
+      {/* General Connection Button */}
+      <div className="space-y-2">
+        <Button 
+          onClick={() => handleConnect()}
+          disabled={isPending}
+          className="w-full h-12 bg-primary hover:bg-primary/90 text-primary-foreground font-mono text-sm tracking-wide rounded-none"
+        >
+          {isPending ? "Connecting..." : 
+           isMobile ? "Connect Mobile Wallet" : "Connect Other Wallet"}
+        </Button>
+        <p className="font-mono text-xs text-muted-foreground">
+          Or connect with MetaMask, WalletConnect, or other wallets
+        </p>
+      </div>
       
       {walletError && (
         <p className="font-mono text-xs text-destructive">
           {walletError}
         </p>
+      )}
+      
+      {/* Debug Info in Development */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="mt-4 p-3 bg-gray-100 rounded text-left">
+          <p className="font-mono text-xs text-gray-600 mb-2">🔍 Debug Info:</p>
+          <p className="font-mono text-xs text-gray-600">Farcaster Env: {isFarcasterEnvironment ? '✅' : '❌'}</p>
+          <p className="font-mono text-xs text-gray-600">Mobile: {isMobile ? '✅' : '❌'}</p>
+          <p className="font-mono text-xs text-gray-600">Connectors: {connectors.length}</p>
+          <p className="font-mono text-xs text-gray-600">Ready: {connectors.filter(c => c.ready).length}</p>
+        </div>
       )}
     </div>
   )
