@@ -4,6 +4,9 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { useAccount, usePublicClient } from 'wagmi'
 import { formatUnits } from 'viem'
 
+// Import Moralis functions for instant token detection
+import { getTokensFromMoralis, getTokenPricesFromMoralis, testMoralisConnection } from '../utils/moralis.js'
+
 // Types for the new MVP flow
 interface TokenInfo {
   address: string
@@ -65,6 +68,97 @@ const ERC20_ABI = [
 const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
 const memoryCache: { [key: string]: { tokens: TokenInfo[], timestamp: number } } = {}
 
+/**
+ * Enhanced token detection using Moralis API with RPC fallback
+ */
+async function detectTokensEnhanced(walletAddress: string, publicClient: any): Promise<TokenInfo[]> {
+  console.log("🚀 Starting enhanced token detection...");
+  console.log(`📍 Wallet: ${walletAddress}`);
+  
+  let tokens: TokenInfo[] = [];
+  
+  try {
+    // Method 1: Try Moralis API first (instant, complete)
+    console.log("\n1️⃣ Attempting Moralis API detection...");
+    
+    // Test connection first
+    const moralisWorking = await testMoralisConnection(walletAddress);
+    
+    if (moralisWorking) {
+      const moralisTokens = await getTokensFromMoralis(walletAddress);
+      
+      if (moralisTokens && moralisTokens.length > 0) {
+        console.log(`🎉 Moralis success! Found ${moralisTokens.length} tokens`);
+        
+        // Transform Moralis tokens to our format
+        tokens = moralisTokens.map((token: any) => ({
+          address: token.address,
+          symbol: token.symbol,
+          name: token.name,
+          decimals: token.decimals,
+          balance: BigInt(token.balance || '0'),
+          balanceFormatted: token.balanceFormatted,
+          priceUSD: 0, // Will be filled by price fetch
+          valueUSD: 0, // Will be calculated
+          isEligible: false, // Will be determined after price fetch
+          error: undefined
+        }));
+        
+        // Get prices for tokens
+        console.log("\n💰 Fetching token prices...");
+        const tokenAddresses = tokens.map(token => token.address);
+        const prices = await getTokenPricesFromMoralis(tokenAddresses);
+        
+        // Add price and value data to tokens
+        tokens = tokens.map(token => {
+          const price = (prices as any)[token.address.toLowerCase()]?.usd || 0;
+          const value = parseFloat(token.balanceFormatted) * price;
+          
+          return {
+            ...token,
+            priceUSD: price,
+            valueUSD: value,
+            isEligible: value >= 0.1 && value <= 5.0 // Filter to dust token range
+          };
+        });
+        
+        console.log(`💵 Added price data to ${tokens.length} tokens`);
+        
+        // Filter to only eligible tokens
+        const eligibleTokens = tokens.filter(token => token.isEligible);
+        console.log(`💸 Eligible dust tokens: ${eligibleTokens.length}`);
+        
+        // Log final results
+        if (eligibleTokens.length > 0) {
+          console.log("🎯 Found eligible tokens:");
+          eligibleTokens.forEach(token => {
+            console.log(`   ${token.symbol}: ${token.balanceFormatted} ($${token.valueUSD?.toFixed(2) || 'No price'})`);
+          });
+        }
+        
+        return eligibleTokens;
+        
+      } else {
+        console.log("⚠️ Moralis returned no tokens, trying fallback...");
+      }
+    }
+    
+    // Method 2: Fallback to RPC scanning if Moralis fails or returns no tokens
+    if (tokens.length === 0) {
+      console.log("\n2️⃣ Moralis failed, falling back to RPC scanning...");
+      // This will be handled by the existing RPC logic in the main function
+      return [];
+    }
+    
+  } catch (error) {
+    console.error("❌ Enhanced token detection failed:", error);
+    // Return empty array to trigger RPC fallback
+    return [];
+  }
+  
+  return tokens;
+}
+
 export function useComprehensiveTokenDetection() {
   const { address: userAddress, isConnected } = useAccount()
   const publicClient = usePublicClient()
@@ -94,9 +188,24 @@ export function useComprehensiveTokenDetection() {
     return null
   }, [userAddress])
 
-  // Robust on-chain token scanning with RPC fallbacks
+  // Robust on-chain token scanning with Base network validation
   const scanWalletTokens = useCallback(async (signal: AbortSignal): Promise<{address: string, balance: bigint}[]> => {
     if (!publicClient || !userAddress) {
+      return []
+    }
+
+    // ✅ Validate we're on Base network
+    try {
+      const network = await publicClient.getChainId()
+      if (network !== 8453) {
+        console.error('❌ Wrong network detected:', network, '- Expected: 8453 (Base)')
+        setError('Please connect to Base network (Chain ID: 8453)')
+        return []
+      }
+      console.log('✅ Connected to Base network (Chain ID: 8453)')
+    } catch (error) {
+      console.error('❌ Failed to validate network:', error)
+      setError('Network validation failed')
       return []
     }
 
@@ -129,7 +238,41 @@ export function useComprehensiveTokenDetection() {
       
       try {
         const currentBlock = await publicClient.getBlockNumber()
-        const startBlock = currentBlock - BigInt(5000) // Last 5k blocks
+        const startBlock = currentBlock - BigInt(10000) // Last 10k blocks for debug
+        
+        // Debug current 10k block range
+        // Debug current 10k block range
+        console.log(`Current scan: blocks ${startBlock.toString()} to ${currentBlock.toString()}`);
+        console.log(`Time coverage: ~${(10000 * 2 / 3600).toFixed(1)} hours ago`);
+
+        // Check if ANY transfers exist in this range
+        try {
+          const logs = await publicClient.getLogs({
+            event: {
+              type: 'event',
+              name: 'Transfer',
+              inputs: [
+                { type: 'address', name: 'from', indexed: true },
+                { type: 'address', name: 'to', indexed: true },
+                { type: 'uint256', name: 'value', indexed: false }
+              ]
+            },
+            fromBlock: startBlock,
+            toBlock: currentBlock
+          });
+          
+          console.log(`Transfer events found: ${logs.length}`);
+          
+          if (logs.length > 0) {
+            console.log(`Sample transfer events:`, logs.slice(0, 3).map(log => ({
+              address: log.address,
+              blockNumber: log.blockNumber
+            })));
+          }
+        } catch (debugError) {
+          console.warn(`Debug transfer check failed:`, debugError);
+        }
+        
         const CHUNK_SIZE = 500 // 1RPC allows 500 block range
         
         console.log('📊 Scanning Transfer events in chunks (500 blocks each)...')
@@ -366,7 +509,7 @@ export function useComprehensiveTokenDetection() {
     }
   }, [publicClient])
 
-  // Batch fetch USD prices from APIs
+  // Batch fetch USD prices from Base network APIs only
   const fetchTokenPrices = useCallback(async (
     addresses: string[], 
     signal: AbortSignal
@@ -374,6 +517,9 @@ export function useComprehensiveTokenDetection() {
     if (addresses.length === 0) {
       return new Map()
     }
+
+    // ✅ Ensure we're fetching Base network prices only
+    console.log('💰 Fetching Base network token prices...')
 
     try {
       console.log(`💰 Fetching prices for ${addresses.length} tokens...`)
@@ -449,11 +595,32 @@ export function useComprehensiveTokenDetection() {
     }
   }, [])
 
-  // Main token detection function
+  // Main token detection function with Base network validation
   const detectTokens = useCallback(async (forceRefresh = false) => {
     if (!isConnected || !userAddress) {
       setTokens([])
       setSelectedTokens({})
+      return
+    }
+
+    // ✅ Validate Base network before starting detection
+    if (!publicClient) {
+      setError('No public client available')
+      return
+    }
+
+    try {
+      const network = await publicClient.getChainId()
+      if (network !== 8453) {
+        setError('Please connect to Base network (Chain ID: 8453)')
+        setTokens([])
+        setSelectedTokens({})
+        return
+      }
+      console.log('✅ Starting Base network token detection...')
+    } catch (error) {
+      console.error('❌ Network validation failed:', error)
+      setError('Failed to validate network')
       return
     }
 
@@ -479,7 +646,30 @@ export function useComprehensiveTokenDetection() {
     try {
       console.log('🚀 Starting comprehensive token detection...')
       
-      // Step 1: Scan wallet for tokens
+      // Step 1: Try enhanced Moralis detection first
+      console.log('🎯 Attempting Moralis API detection...')
+      const enhancedTokens = await detectTokensEnhanced(userAddress, publicClient)
+      
+      if (enhancedTokens.length > 0) {
+        console.log(`🎉 Moralis detection successful! Found ${enhancedTokens.length} eligible tokens`)
+        
+        // Cache results
+        if (userAddress) {
+          memoryCache[userAddress.toLowerCase()] = {
+            tokens: enhancedTokens,
+            timestamp: Date.now()
+          }
+        }
+        
+        setTokens(enhancedTokens)
+        setSelectedTokens({}) // Reset selection
+        setIsLoading(false)
+        return
+      }
+      
+      console.log('⚠️ Moralis detection returned no tokens, falling back to RPC scanning...')
+      
+      // Step 2: Fallback to RPC scanning
       const walletTokens = await scanWalletTokens(signal)
       
       if (walletTokens.length === 0) {
@@ -562,7 +752,7 @@ export function useComprehensiveTokenDetection() {
     } finally {
       setIsLoading(false)
     }
-  }, [isConnected, userAddress, getCachedTokens, scanWalletTokens, fetchTokenMetadata, fetchTokenPrices])
+  }, [isConnected, userAddress, getCachedTokens, scanWalletTokens, fetchTokenMetadata, fetchTokenPrices, detectTokensEnhanced])
 
   // Validate swap selection
   const validateSwapSelection = useCallback(() => {
